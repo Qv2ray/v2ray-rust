@@ -1,3 +1,20 @@
+use serde::Deserialize;
+use serde_json::{from_reader as inner_from_reader, from_str as inner_from_str, Error};
+use std::io::Read;
+
+/*
+pub fn from_reader<R>(reader: R) -> Result<Config, Error>
+where
+    R: Read,
+{
+    inner_from_reader(reader)
+}
+
+pub fn from_str(s: &str) -> Result<Config, Error> {
+    inner_from_str(s)
+}
+*/
+
 pub type Time = u32;
 pub type Address = String;
 pub type Port = u16;
@@ -104,23 +121,30 @@ pub struct Config {
 }
 
 pub mod log {
+    use serde::Deserialize;
     /// The level of the log.
+    #[derive(Deserialize, Debug)]
     pub enum LogLevel {
         /// `"debug"` : Information that only developers can understand.
         /// It contains all the `"info"` content.
+        #[serde(rename(deserialize = "debug"))]
         Debug,
         /// `"info"` : The state of V2Ray at runtime, does not affect
         /// normal use. It contains all the `"warning"` content.
+        #[serde(rename(deserialize = "info"))]
         Info,
         /// `"warning"` : V2Ray has encountered some problems, usually
         /// external problems, which do not affect the normal operation
         /// of V2Ray, but may affect the user experience. It contains
         /// all the `"error"` content.
+        #[serde(rename(deserialize = "warning"))]
         Warning,
         /// `"error"` : V2Ray has encountered a problem that cannot run
         /// normally and needs to be resolved immediately.
+        #[serde(rename(deserialize = "error"))]
         Error,
         /// `"none"` : Do not record anything.
+        #[serde(rename(deserialize = "none"))]
         None,
     }
 
@@ -133,6 +157,8 @@ pub mod log {
     ///     "loglevel": "warning",
     /// }
     /// ```
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
     pub struct Log {
         /// The file address of the access log. Its value is a legal file
         /// address, such as `"/var/log/v2ray/access.log"` (Linux) or
@@ -151,9 +177,40 @@ pub mod log {
         /// The level of the log. The default value is `"warning"`.
         log_level: LogLevel,
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use serde_json::{from_str, from_value, json};
+
+        #[test]
+        pub fn test_deserialize_level() {
+            let ds = from_str::<LogLevel>("\"warning\"");
+            assert_eq!(ds.is_ok(), true);
+            assert!(matches!(ds.unwrap(), LogLevel::Warning));
+
+            let ds = from_str::<LogLevel>("\"info\"");
+            assert!(matches!(ds.unwrap(), LogLevel::Info));
+        }
+
+        #[test]
+        pub fn test_deserialize_log() {
+            let result = from_value::<Log>(json!({
+                "access": "/var/log/v2ray/access.log",
+                "error": "/var/log/v2ray/error.log",
+                "logLevel": "info"
+            }));
+
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap().access, "/var/log/v2ray/access.log");
+        }
+    }
 }
 
 pub mod api {
+    use serde::Deserialize;
+
+    #[derive(Deserialize, Debug)]
     pub enum Service {
         /// `"HandlerService"`
         ///
@@ -190,6 +247,7 @@ pub mod api {
     ///     ]
     /// }
     /// ```
+    #[derive(Deserialize)]
     pub struct Api {
         /// Outbound proxy ID.
         tag: String,
@@ -460,6 +518,13 @@ pub mod routing {
     /// Load balancer configuration. When a load balancer takes effect, it will select
     /// the most appropriate outbound protocol from the specified outbound protocol
     /// according to the configuration, and then forward the traffic.
+    ///
+    /// ```json
+    /// {
+    ///     "tag": "balancer",
+    ///     "selector": []
+    /// }
+    /// ```
     pub struct Balancer {
         /// This identification of the load balancer, for matching `RuleObject` the `balancerTag`.
         tag: String,
@@ -1367,6 +1432,12 @@ pub mod reverse {
         domain: String,
     }
 
+    /// ```json
+    /// {
+    ///     "tag": "portal",
+    ///     "domain": "test.v2fly.org"
+    /// }
+    /// ```
     pub struct Portal {
         /// A Tag. You need to redirect all traffic to this `portal`, by targeting `outboundTag` to
         /// this `tag`. The traffic includes the connections from `bridge`, as well as internet
@@ -2105,7 +2176,7 @@ pub mod protocol {
             clients: Vec<Client>,
             /// Optional, the default configuration of clients. It is only `detour` effective when
             /// matched .
-            default: Default,
+            default: Option<Default>,
             /// Instruct the corresponding outbound protocol to use another server.
             detour: Detour,
             /// Whether to prohibit the client from using insecure encryption methods, when the
@@ -2133,7 +2204,7 @@ pub mod protocol {
         /// ```
         pub struct Server {
             /// Email address, optional, used to identify the user
-            email: String,
+            email: Option<String>,
             /// Shadowsocks server address, supports IPv4, IPv6 and domain name. Required.
             address: Address,
             /// Shadowsocks server port. Required.
@@ -2181,7 +2252,7 @@ pub mod protocol {
 
         pub struct InboundConfiguration {
             /// Email address, optional, used to identify the user
-            email: String,
+            email: Option<String>,
             /// Required. Possible values see [encryption
             /// list](../shadowsocks/enum.EncryptionMethod.html)
             method: EncryptionMethod,
@@ -2217,7 +2288,7 @@ pub mod protocol {
             /// Required, any string.
             password: String,
             /// Email address, optional, used to identify the user
-            email: String,
+            email: Option<String>,
             /// User level, the default value is 0. See [local
             /// policy](../../policy/struct.UserLevel.html).
             level: UserLevel,
@@ -2263,7 +2334,7 @@ pub mod protocol {
             /// Required, any string.
             password: String,
             /// Email address, optional, used to identify the user
-            email: String,
+            email: Option<String>,
             /// user level
             level: UserLevel,
         }
