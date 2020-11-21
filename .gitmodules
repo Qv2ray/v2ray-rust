@@ -1,0 +1,6 @@
+[submodule "unpulished_crate/CIDRMatcher"]
+	path = unpulished_crate/CIDRMatcher
+	url = https://github.com/Qv2ray/CIDRMatcher.git
+[submodule "unpulished_crate/DomainMatcher"]
+	path = unpulished_crate/DomainMatcher
+	url = https://github.com/Qv2ray/DomainMatcher.git
