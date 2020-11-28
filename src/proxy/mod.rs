@@ -1,3 +1,4 @@
+mod socks5;
 use bytes::buf::{Buf, BufMut};
 use bytes::BytesMut;
 use smol::io::{self};
@@ -293,7 +294,6 @@ impl From<&Address> for Address {
     }
 }
 
-pub trait InboundAcceptor: AsyncWrite + AsyncRead + Send + Unpin {}
 pub trait OutBound: AsyncWrite + AsyncRead + Send + Unpin {}
 
 pub enum AcceptResult<
