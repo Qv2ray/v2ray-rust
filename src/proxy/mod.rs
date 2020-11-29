@@ -1,9 +1,16 @@
+mod shadowsocks;
 mod socks5;
+mod tls;
+
+use async_trait::async_trait;
 use bytes::buf::{Buf, BufMut};
 use bytes::BytesMut;
 use smol::io::{self};
 use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, Error};
-use smol::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6};
+use smol::net::{
+    AsyncToSocketAddrs, Ipv4Addr, Ipv6Addr, Shutdown, SocketAddr, SocketAddrV4, SocketAddrV6,
+    TcpListener, TcpStream,
+};
 use std::fmt;
 use std::fmt::{Debug, Formatter};
 use std::io::{Cursor, ErrorKind};
@@ -294,12 +301,34 @@ impl From<&Address> for Address {
     }
 }
 
-pub trait OutBound: AsyncWrite + AsyncRead + Send + Unpin {}
+pub trait AcceptSteam: AsyncRead + AsyncWrite + Send + Unpin {
+    fn shutdown(&self, how: std::net::Shutdown) -> io::Result<()>;
+    fn local_addr(&self) -> io::Result<SocketAddr>;
+}
 
-pub enum AcceptResult<
-    T: AsyncRead + AsyncWrite + Send + Unpin,
-    U: AsyncRead + AsyncWrite + Send + Unpin,
-> {
-    TCP(T, Arc<dyn OutBound>),
-    UDP(U, Arc<dyn OutBound>),
+#[async_trait]
+pub trait Acceptor: Send + Sync {
+    type S: AcceptSteam;
+    async fn accept(&self) -> io::Result<(Self::S, SocketAddr)>;
+}
+
+#[async_trait]
+impl Acceptor for TcpListener {
+    type S = TcpStream;
+
+    #[inline]
+    async fn accept(&self) -> io::Result<(Self::S, SocketAddr)> {
+        self.accept().await
+    }
+}
+
+#[async_trait]
+impl AcceptSteam for TcpStream {
+    fn shutdown(&self, how: Shutdown) -> io::Result<()> {
+        self.shutdown(how)
+    }
+
+    fn local_addr(&self) -> io::Result<SocketAddr> {
+        self.local_addr()
+    }
 }

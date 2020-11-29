@@ -1,4 +1,4 @@
-mod inbound;
+pub mod inbound;
 mod server_client;
 
 const SOCKS_VERSION: u8 = 0x05;
