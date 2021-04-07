@@ -1,5 +1,5 @@
 [package]
-name = "actix-proxy"
+name = "v2ray-rust"
 version = "0.1.0"
 authors = ["darsvador"]
 edition = "2018"
