@@ -1,15 +1,37 @@
 [package]
-name = "v2ray-rust"
+name = "actix-proxy"
 version = "0.1.0"
-authors = ["DuckVador"]
+authors = ["darsvador"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-smol = "1.2.4"
-cidr_matcher = { path="unpulished_crate/CIDRMatcher"}
-domain_matcher = {path="unpulished_crate/DomainMatcher"}
-bytes = "0.6.0"
-async-rustls = "0.1.2"
-async-trait = "*"
+actix = "0.10.0"
+actix-http = { version = "3.0.0-beta.5", features = ["rustls"]}
+actix-rt = "2.2.0"
+actix-server = "2.0.0-beta.4"
+awc = "3.0.0-beta.4"
+actix-service = "2.0.0-beta.5"
+snmalloc-rs = "0.2.6"
+bytes = "1"
+rand = { version = "0.7", features = ["small_rng"] }
+num_cpus = "1.13.0"
+futures = "0.3.1"
+tokio = {version="1", features=["net","io-util","macros"]}
+futures-util = "0.3"
+bloomfilter = "1.0.2"
+byte_string = "1.0"
+spin = "0.7.0"
+domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
+cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
+generator={git="https://github.com/Qv2ray/generator/"}
+
+[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
+shadowsocks-crypto = { version = "0.2", features = ["ring"] }
+
+[target.'cfg(any(target_arch = "arm", target_arch = "aarch64"))'.dependencies]
+shadowsocks-crypto = { version = "0.2", features = ["ring"] }
+
+[target.'cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "arm", target_arch = "aarch64")))'.dependencies]
+shadowsocks-crypto = { version = "0.2", features = [] }
