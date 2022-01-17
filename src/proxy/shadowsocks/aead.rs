@@ -10,12 +10,13 @@ use std::{
 
 use bytes::{Buf, BufMut, BytesMut};
 
-use crate::common::{poll_read_buf, PollUtil, HW_BUFFER_SIZE, LW_BUFFER_SIZE};
+use crate::common::{net::PollUtil, LW_BUFFER_SIZE};
 use futures_util::ready;
 use generator::state_machine_generator;
 use shadowsocks_crypto::v1::{Cipher, CipherKind};
-use std::io::Write;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
+
+use crate::impl_read_utils;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// AEAD packet payload must be smaller than 0x3FFF
 pub const MAX_PACKET_SIZE: usize = 0x3FFF;
@@ -36,7 +37,7 @@ pub struct DecryptedReader {
     data_length: usize,
     minimal_data_to_put: usize,
     read_res: Poll<io::Result<()>>,
-    n: usize,
+    read_zero: bool,
 }
 
 impl DecryptedReader {
@@ -49,37 +50,13 @@ impl DecryptedReader {
             data_length: 0,
             minimal_data_to_put: 0,
             read_res: Poll::Pending,
-            n: 0,
+            read_zero: false,
         }
     }
 
-    #[inline]
-    fn calc_data_to_put(&mut self, dst: &mut ReadBuf<'_>) -> usize {
-        self.minimal_data_to_put = cmp::min(self.data_length, dst.remaining());
-        self.minimal_data_to_put
-    }
-
-    #[inline]
-    fn read_until<R>(
-        &mut self,
-        r: &mut R,
-        ctx: &mut Context<'_>,
-        length: usize,
-    ) -> Poll<io::Result<()>>
-    where
-        R: AsyncRead + Unpin,
-    {
-        self.n = 0;
-        while self.buffer.len() < length {
-            self.n += ready!(poll_read_buf(r, ctx, &mut self.buffer))?;
-            if self.n == 0 {
-                return Err(ErrorKind::UnexpectedEof.into()).into();
-            }
-        }
-        Poll::Ready(Ok(()))
-    }
-
-    #[state_machine_generator(state, Err(ErrorKind::UnexpectedEof.into()).into())]
+    impl_read_utils!();
+    #[state_machine_generator]
+    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_read_decrypted<R>(
         &mut self,
         ctx: &mut Context<'_>,
@@ -91,12 +68,15 @@ impl DecryptedReader {
     {
         loop {
             loop {
-                self.read_res = (self.read_until(r, ctx, self.tag_size + 2));
+                self.read_res = (self.read_at_least(r, ctx, self.tag_size + 2));
                 if self.read_res.is_pending() {
                     co_yield(Poll::Pending);
                     continue;
                 }
                 if self.read_res.is_error() {
+                    if self.read_zero {
+                        return Poll::Ready(Ok(()));
+                    }
                     return std::mem::replace(&mut self.read_res, Poll::Pending);
                 }
                 break;
@@ -106,14 +86,17 @@ impl DecryptedReader {
                 &mut self.buffer.as_mut()[0..self.tag_size + 2],
             )? + self.tag_size;
             self.buffer.advance(self.tag_size + 2);
-            self.buffer.reserve(self.data_length);
+            self.read_reserve(self.data_length);
             loop {
-                self.read_res = (self.read_until(r, ctx, self.data_length));
+                self.read_res = (self.read_at_least(r, ctx, self.data_length));
                 if self.read_res.is_pending() {
                     co_yield(Poll::Pending);
                     continue;
                 }
                 if self.read_res.is_error() {
+                    if self.read_zero {
+                        return Poll::Ready(Ok(()));
+                    }
                     return std::mem::replace(&mut self.read_res, Poll::Pending);
                 }
                 break;
@@ -122,7 +105,10 @@ impl DecryptedReader {
                 .cipher
                 .decrypt_packet(&mut self.buffer.as_mut()[0..self.data_length])
             {
-                return Poll::Ready(Err(io::Error::new(io::ErrorKind::Other, "invalid tag-in")));
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "invalid aead tag",
+                )));
             }
             self.data_length -= self.tag_size;
             while self.calc_data_to_put(dst) != 0 {
@@ -166,7 +152,7 @@ enum EncryptWriteStep {
 pub struct EncryptedWriter {
     cipher: Cipher,
     tag_size: usize,
-    state: u32,
+    state: u32, // for state machine generator use
     steps: EncryptWriteStep,
     buf: BytesMut,
     pos: usize,
@@ -193,7 +179,8 @@ impl EncryptedWriter {
         }
     }
 
-    #[state_machine_generator(state, Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[state_machine_generator]
+    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_write_encrypted<W>(
         &mut self,
         ctx: &mut Context<'_>,

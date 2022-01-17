@@ -1,6 +1,6 @@
 use bloomfilter::Bloom;
 use spin::Mutex as SpinMutex;
-use std::sync::atomic::AtomicBool;
+
 use std::sync::Arc;
 
 // A bloom filter borrowed from shadowsocks-libev's `ppbloom`

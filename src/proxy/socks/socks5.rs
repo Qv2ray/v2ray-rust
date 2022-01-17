@@ -1,13 +1,12 @@
 use crate::common::LW_BUFFER_SIZE;
 use crate::proxy::socks::{auth_methods, response_code, socks_command, Address, SOCKS_VERSION};
 use bytes::{BufMut, BytesMut};
-use futures::Future;
+
 use std::collections::HashMap;
 use std::io;
 use std::io::Error;
 use std::net::SocketAddr;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub struct Socks5Stream<S> {

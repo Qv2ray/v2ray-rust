@@ -4,22 +4,25 @@ use std::{
     io,
     marker::Unpin,
     pin::Pin,
-    slice,
     task::{Context, Poll},
 };
 
-use bytes::{buf::Limit, Buf, BufMut, Bytes, BytesMut};
+use bytes::{Bytes, BytesMut};
 
 use shadowsocks_crypto::v1::{random_iv_or_salt, CipherCategory, CipherKind};
 
 use super::aead::{DecryptedReader as AeadDecryptedReader, EncryptedWriter as AeadEncryptedWriter};
-use crate::common::poll_read_buf;
+use crate::common::net::poll_read_buf;
 use crate::proxy::shadowsocks::context::SharedContext;
-use byte_string::ByteStr;
+
 use futures_util::ready;
-use std::io::{Error, ErrorKind, IoSlice};
-use std::mem::MaybeUninit;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf, ReadHalf, WriteHalf};
+use std::io::{Error, ErrorKind};
+
+use crate::{
+    impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
+    impl_split_stream,
+};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
 
 enum DecryptedReader {
     None,
@@ -148,8 +151,6 @@ where
             let nonce = buf.as_ref();
             // Got iv/salt, check if it is repeated
             if ctx.check_nonce_and_set(nonce) {
-                use std::io::{Error, ErrorKind};
-                //debug!("detected repeated iv/salt {:?}", ByteStr::new(nonce));
                 let err = Error::new(ErrorKind::Other, "detected repeated iv/salt");
                 return Poll::Ready(Err(err));
             }
@@ -198,57 +199,6 @@ where
         }
     }
 
-    fn priv_poll_flush(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        AsyncWrite::poll_flush(Pin::new(&mut self.stream), ctx)
-    }
-
-    fn priv_poll_shutdown(mut self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        AsyncWrite::poll_shutdown(Pin::new(&mut self.stream), ctx)
-    }
+    impl_flush_shutdown!();
 }
-
-impl<S> CryptoStream<S>
-where
-    S: AsyncRead + AsyncWrite + Unpin,
-{
-    /// Split connection into reader and writer
-    ///
-    /// The two halfs share the same `CryptoStream<S>`
-    pub fn split(self) -> (ReadHalf<CryptoStream<S>>, WriteHalf<CryptoStream<S>>) {
-        tokio::io::split(self)
-    }
-}
-
-impl<S> AsyncRead for CryptoStream<S>
-where
-    S: AsyncRead + Unpin,
-{
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
-        self.priv_poll_read(cx, buf)
-    }
-}
-
-impl<S> AsyncWrite for CryptoStream<S>
-where
-    S: AsyncWrite + AsyncWriteExt + Unpin,
-{
-    fn poll_write(
-        self: Pin<&mut Self>,
-        ctx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
-        self.priv_poll_write(ctx, buf)
-    }
-
-    fn poll_flush(self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<io::Result<()>> {
-        self.priv_poll_flush(ctx)
-    }
-
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
-        self.priv_poll_shutdown(cx)
-    }
-}
+impl_async_useful_traits!(CryptoStream);
