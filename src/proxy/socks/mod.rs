@@ -8,6 +8,7 @@ use std::str::FromStr;
 use std::vec;
 use std::{fmt, io};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use crate::common::new_error;
 
 pub const SOCKS_VERSION: u8 = 0x05;
 
@@ -37,12 +38,6 @@ pub(crate) mod socks_command {
     pub const UDP_ASSOSIATE: u8 = 0x3;
 }
 
-fn new_error<T: ToString>(message: T) -> io::Error {
-    return Error::new(
-        std::io::ErrorKind::Other,
-        format!("protocol: {}", message.to_string()),
-    );
-}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Address {

@@ -84,6 +84,33 @@ pub(crate) async fn test_relay_vmess<T: AsyncWrite + AsyncRead + Unpin>(
     Ok(())
 }
 
+pub(crate) async fn test_relay_ws_vmess<T: AsyncWrite + AsyncRead + Unpin>(
+    t: (T, Address),
+) -> io::Result<()> {
+    let (inbound_stream, addr) = t;
+    println!("addr:{}", addr);
+    let outbound_stream = TcpStream::connect("127.0.0.1:10002").await?;
+    let uuid = "b831381d-6324-4d53-ad4f-8cda48b30811".to_string();
+    let security = "auto".to_string();
+    let option = VmessOption::new(&uuid, 0, &security, addr, false).unwrap();
+    let outbound_stream = VmessStream::<TcpStream>::new(option, outbound_stream);
+    let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
+    let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);
+    let mut down = 0u64;
+    let mut up = 0u64;
+    let res = tokio::try_join!(
+        copy_with_capacity_and_counter(&mut outbound_r, &mut inbound_w, &mut down, LW_BUFFER_SIZE),
+        copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w, &mut up, LW_BUFFER_SIZE)
+    );
+    match res {
+        Ok((_, _)) => {}
+        Err(e) => {
+            println!("processing failed; error = {}", e);
+        }
+    }
+    println!("downloaded bytes:{}, uploaded bytes:{}", down, up);
+    Ok(())
+}
 fn main() -> io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
     actix_rt::System::new().block_on(async move {

@@ -1,4 +1,8 @@
-use crypto2::mac::HmacSha256;
+use sha2::Sha256;
+use hmac::Hmac;
+use hmac::Mac;
+use generic_array::GenericArray;
+type HmacSha256=Hmac<Sha256>;
 
 const IPAD: u8 = 0x36;
 const OPAD: u8 = 0x5C;
@@ -25,8 +29,8 @@ macro_rules! impl_hmac_with_hasher {
         }
 
         impl $name {
-            pub const BLOCK_LEN: usize = $hasher::BLOCK_LEN;
-            pub const TAG_LEN: usize = $hasher::TAG_LEN;
+            pub const BLOCK_LEN: usize = 64;
+            pub const TAG_LEN: usize = 32;
 
             pub fn new(mut hasher: $hasher, key: &[u8]) -> Self {
                 // H(K XOR opad, H(K XOR ipad, text))
@@ -74,26 +78,69 @@ macro_rules! impl_hmac_with_hasher {
         }
     };
 }
+#[derive(Clone)]
+pub struct VmessKdf1 {
+    okey: [u8; Self::BLOCK_LEN],
+    hasher: HmacSha256,
+    hasher_outer: HmacSha256,
+}
+impl VmessKdf1 {
+    pub const BLOCK_LEN: usize = 64;
+    pub const TAG_LEN: usize = 32;
 
-impl_hmac_with_hasher!(VmessKdf1, HmacSha256);
+    pub fn new(mut hasher: HmacSha256, key: &[u8]) -> Self {
+        let mut ikey = [0u8; Self::BLOCK_LEN];
+        let mut okey = [0u8; Self::BLOCK_LEN];
+        let hasher_outer = hasher.clone();
+        if key.len() > Self::BLOCK_LEN {
+            let mut hh = hasher.clone();
+            hh.update(key);
+            let hkey = hh.finalize().into_bytes();
+
+            ikey[..Self::TAG_LEN].copy_from_slice(&hkey[..Self::TAG_LEN]);
+            okey[..Self::TAG_LEN].copy_from_slice(&hkey[..Self::TAG_LEN]);
+        } else {
+            ikey[..key.len()].copy_from_slice(&key);
+            okey[..key.len()].copy_from_slice(&key);
+        }
+
+        for idx in 0..Self::BLOCK_LEN {
+            ikey[idx] ^= IPAD;
+            okey[idx] ^= OPAD;
+        }
+        hasher.update(&ikey);
+        Self {
+            okey,
+            hasher,
+            hasher_outer,
+        }
+    }
+
+    pub fn update(&mut self, m: &[u8]) {
+        self.hasher.update(m);
+    }
+
+    pub fn finalize(mut self) -> [u8; Self::TAG_LEN] {
+        let h1 = self.hasher.finalize().into_bytes();
+
+        self.hasher_outer.update(&self.okey);
+        self.hasher_outer.update(&h1);
+
+        let h2 = self.hasher_outer.finalize().into_bytes().into();
+
+        return h2;
+    }
+}
+
 impl_hmac_with_hasher!(VmessKdf2, VmessKdf1);
 impl_hmac_with_hasher!(VmessKdf3, VmessKdf2);
-#[inline]
-fn get_vmess_kdf_0() -> HmacSha256 {
-    HmacSha256::new(KDF_SALT_CONST_VMESS_AEAD_KDF)
-}
-pub fn vmess_kdf_0_one_shot(id: &[u8]) -> [u8; HmacSha256::TAG_LEN] {
-    let mut h = get_vmess_kdf_0();
-    h.update(id);
-    h.finalize()
-}
 
 #[inline]
 fn get_vmess_kdf_1(key1: &[u8]) -> VmessKdf1 {
-    VmessKdf1::new(HmacSha256::new(KDF_SALT_CONST_VMESS_AEAD_KDF), key1)
+    VmessKdf1::new(HmacSha256::new_from_slice(KDF_SALT_CONST_VMESS_AEAD_KDF).unwrap(), key1)
 }
 
-pub fn vmess_kdf_1_one_shot(id: &[u8], key1: &[u8]) -> [u8; HmacSha256::TAG_LEN] {
+pub fn vmess_kdf_1_one_shot(id: &[u8], key1: &[u8]) -> [u8; 32] {
     let mut h = get_vmess_kdf_1(key1);
     h.update(id);
     h.finalize()
@@ -103,7 +150,7 @@ pub fn vmess_kdf_1_one_shot(id: &[u8], key1: &[u8]) -> [u8; HmacSha256::TAG_LEN]
 fn get_vmess_kdf_2(key1: &[u8], key2: &[u8]) -> VmessKdf2 {
     VmessKdf2::new(get_vmess_kdf_1(key1), key2)
 }
-pub fn vmess_kdf_2_one_shot(id: &[u8], key1: &[u8], key2: &[u8]) -> [u8; HmacSha256::TAG_LEN] {
+pub fn vmess_kdf_2_one_shot(id: &[u8], key1: &[u8], key2: &[u8]) -> [u8; 32] {
     let mut h = get_vmess_kdf_2(key1, key2);
     h.update(id);
     h.finalize()
@@ -119,7 +166,7 @@ pub fn vmess_kdf_3_one_shot(
     key1: &[u8],
     key2: &[u8],
     key3: &[u8],
-) -> [u8; HmacSha256::TAG_LEN] {
+) -> [u8; 32] {
     let mut h = get_vmess_kdf_3(key1, key2, key3);
     h.update(id);
     h.finalize()

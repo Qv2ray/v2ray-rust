@@ -3,14 +3,16 @@ use crate::proxy::show_utf8_lossy;
 use crate::proxy::vmess::vmess::{CHUNK_SIZE, MAX_SIZE};
 use crate::{debug_log, impl_read_utils, LW_BUFFER_SIZE};
 use bytes::{Buf, BufMut, BytesMut};
-use crypto2::aeadcipher::Chacha20Poly1305;
-use crypto2::blockmode::Aes128Gcm;
 use futures_util::ready;
 use generator::state_machine_generator;
 use std::io::ErrorKind;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{cmp, io, slice};
+use aes_gcm::Aes128Gcm;
+use chacha20poly1305::ChaCha20Poly1305;
+use aead::AeadCore;
+use crate::common::aead_helper::AeadCipherHelper;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 pub const AES_128_GCM_OVERHEAD: usize = 16;
@@ -29,30 +31,22 @@ pub struct VmessAeadWriter {
 pub enum VmessSecurity {
     None,
     Aes128Gcm(Aes128Gcm),
-    ChaCha20Poly1305(Chacha20Poly1305),
+    ChaCha20Poly1305(ChaCha20Poly1305),
 }
 
 impl VmessSecurity {
+
+    #[inline(always)]
     pub fn overhead_len(&self) -> usize {
-        match self {
-            VmessSecurity::None => 0,
-            VmessSecurity::Aes128Gcm(_) => AES_128_GCM_OVERHEAD,
-            VmessSecurity::ChaCha20Poly1305(_) => CHACHA20POLY1305_GCM_OVERHEAD,
-        }
+        16
     }
+    #[inline(always)]
     pub fn nonce_len(&self) -> usize {
-        match self {
-            VmessSecurity::None => 0,
-            VmessSecurity::Aes128Gcm(_) => Aes128Gcm::NONCE_LEN,
-            VmessSecurity::ChaCha20Poly1305(_) => Chacha20Poly1305::NONCE_LEN,
-        }
+        12
     }
+    #[inline(always)]
     pub fn tag_len(&self) -> usize {
-        match self {
-            VmessSecurity::None => 0,
-            VmessSecurity::Aes128Gcm(_) => Aes128Gcm::TAG_LEN,
-            VmessSecurity::ChaCha20Poly1305(_) => Chacha20Poly1305::TAG_LEN,
-        }
+        16
     }
 }
 
@@ -136,12 +130,12 @@ impl VmessAeadWriter {
                 unreachable!()
             }
             VmessSecurity::Aes128Gcm(cipher) => {
-                cipher.encrypt_slice(&self.nonce[..nonce_len], &aad, mbuf);
-                unsafe { self.buffer.advance_mut(Aes128Gcm::TAG_LEN) };
+                cipher.encrypt_inplace_with_slice(&self.nonce[..nonce_len], &aad, mbuf);
+                unsafe { self.buffer.advance_mut(16) };
             }
             VmessSecurity::ChaCha20Poly1305(cipher) => {
-                cipher.encrypt_slice(&self.nonce[..nonce_len], &aad, mbuf);
-                unsafe { self.buffer.advance_mut(Aes128Gcm::TAG_LEN) };
+                cipher.encrypt_inplace_with_slice(&self.nonce[..nonce_len], &aad, mbuf);
+                unsafe { self.buffer.advance_mut(16) };
             }
         }
         debug_log!("encrypted buffer len3:{}", self.buffer.len());
@@ -210,14 +204,14 @@ impl VmessAeadReader {
                 unreachable!()
             }
             VmessSecurity::Aes128Gcm(cipher) => {
-                res = cipher.decrypt_slice(
+                res = cipher.decrypt_inplace_with_slice(
                     &self.nonce[..nonce_len],
                     &aad,
                     &mut self.buffer[..self.data_length],
                 );
             }
             VmessSecurity::ChaCha20Poly1305(cipher) => {
-                res = cipher.decrypt_slice(
+                res = cipher.decrypt_inplace_with_slice(
                     &self.nonce[..nonce_len],
                     &aad,
                     &mut self.buffer[..self.data_length],

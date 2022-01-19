@@ -1,6 +1,4 @@
 use bytes::{Buf, BufMut, BytesMut};
-use crypto2::aeadcipher::Aes128Gcm;
-use crypto2::blockcipher::Aes128;
 use std::convert::TryFrom;
 use std::slice::from_raw_parts_mut;
 
@@ -21,9 +19,13 @@ use shadowsocks_crypto::v1::random_iv_or_salt;
 use std::io::ErrorKind;
 use std::task::{Context, Poll};
 use std::{cmp, io};
+use aes::Aes128;
+use aes_gcm::Aes128Gcm;
 use tokio::io::{AsyncRead, ReadBuf};
+use crate::common::{AES_128_GCM_TAG_LEN, BlockCipherHelper};
+use crate::common::aead_helper::AeadCipherHelper;
 
-fn create_auth_id(cmd_key: &[u8; 16], time: &[u8]) -> BytesMut {
+fn create_auth_id(cmd_key: &[u8], time: &[u8]) -> BytesMut {
     let mut buf = BytesMut::new();
     buf.put_slice(time);
     let mut random_bytes = [0u8; 4];
@@ -33,15 +35,12 @@ fn create_auth_id(cmd_key: &[u8; 16], time: &[u8]) -> BytesMut {
     let zero = crc32fast::hash(&*buf);
     buf.put_u32(zero);
     let key = vmess_kdf_1_one_shot(cmd_key, KDF_SALT_CONST_AUTH_ID_ENCRYPTION_KEY);
-    let block = Aes128::new(&key[0..16]);
-    block.encrypt(&mut buf);
-    unsafe {
-        buf.set_len(16);
-    }
+    let block = Aes128::new_with_slice(&key[0..16]);
+    block.encrypt_with_slice(&mut buf);
     buf
 }
 
-pub fn seal_vmess_aead_header(cmd_key: &[u8; 16], data: &[u8]) -> BytesMut {
+pub fn seal_vmess_aead_header(cmd_key: &[u8], data: &[u8]) -> BytesMut {
     #[cfg(not(test))]
     let time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -62,7 +61,7 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8; 16], data: &[u8]) -> BytesMut {
 
     // reserve (header_length + nonce + data + 2*tag) bytes
     // total_len = 16 +
-    generated_auth_id.reserve(2 + connection_nonce.len() + data.len() + 2 * Aes128Gcm::TAG_LEN);
+    generated_auth_id.reserve(2 + connection_nonce.len() + data.len() + 2 * AES_128_GCM_TAG_LEN);
     {
         let payload_header_length_aeadkey = vmess_kdf_3_one_shot(
             cmd_key,
@@ -73,16 +72,16 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8; 16], data: &[u8]) -> BytesMut {
         let payload_header_length_aead_nonce = vmess_kdf_3_one_shot(
             cmd_key,
             KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_IV,
-            &*generated_auth_id,
+            &generated_auth_id,
             &connection_nonce,
         );
         let nonce = &payload_header_length_aead_nonce[..12];
-        let cipher = Aes128Gcm::new(&payload_header_length_aeadkey[0..16]);
-        let mbuf = &mut generated_auth_id.chunk_mut()[..2 + Aes128Gcm::TAG_LEN];
+        let cipher = Aes128Gcm::new_with_slice(&payload_header_length_aeadkey[0..16]);
+        let mbuf = &mut generated_auth_id.chunk_mut()[..2 + AES_128_GCM_TAG_LEN];
         let mbuf = unsafe { from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         generated_auth_id.put_u16(data.len() as u16);
-        cipher.encrypt_slice(&nonce, &generated_auth_id[..id_len], mbuf);
-        unsafe { generated_auth_id.advance_mut(Aes128Gcm::TAG_LEN) };
+        cipher.encrypt_inplace_with_slice(&nonce, &generated_auth_id[..id_len], mbuf);
+        unsafe { generated_auth_id.advance_mut(AES_128_GCM_TAG_LEN) };
     }
     generated_auth_id.put_slice(&connection_nonce);
     {
@@ -99,12 +98,12 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8; 16], data: &[u8]) -> BytesMut {
             &connection_nonce,
         );
         let nonce = &payload_header_aead_nonce[..12];
-        let cipher = Aes128Gcm::new(&payload_header_aead_key[0..16]);
-        let mbuf = &mut generated_auth_id.chunk_mut()[..data.len() + Aes128Gcm::TAG_LEN];
+        let cipher = Aes128Gcm::new_with_slice(&payload_header_aead_key[0..16]);
+        let mbuf = &mut generated_auth_id.chunk_mut()[..data.len() + AES_128_GCM_TAG_LEN];
         let mbuf = unsafe { from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         generated_auth_id.put_slice(data);
-        cipher.encrypt_slice(&nonce, &generated_auth_id[..id_len], mbuf);
-        unsafe { generated_auth_id.advance_mut(Aes128Gcm::TAG_LEN) };
+        cipher.encrypt_inplace_with_slice(&nonce, &generated_auth_id[..id_len], mbuf);
+        unsafe { generated_auth_id.advance_mut(AES_128_GCM_TAG_LEN) };
     }
     generated_auth_id
 }
@@ -134,8 +133,8 @@ impl VmessHeaderReader {
             vmess_kdf_1_one_shot(resp_body_key, KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_KEY);
         let payload_iv =
             vmess_kdf_1_one_shot(resp_body_iv, KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_IV);
-        let resp_header_len_enc = Aes128Gcm::new(&header_key[..16]);
-        let resp_header_payload_enc = Aes128Gcm::new(&payload_key[..16]);
+        let resp_header_len_enc = Aes128Gcm::new_with_slice(&header_key[..16]);
+        let resp_header_payload_enc = Aes128Gcm::new_with_slice(&payload_key[..16]);
         let buffer = BytesMut::with_capacity(LW_BUFFER_SIZE * 2);
         VmessHeaderReader {
             buffer,
@@ -190,7 +189,7 @@ impl VmessHeaderReader {
             }
             let aad = [0u8; 0];
             debug_log!("vmess: try aead header decrypt len");
-            if !self.resp_header_len_enc.decrypt_slice(
+            if !self.resp_header_len_enc.decrypt_inplace_with_slice(
                 &self.header_len_iv,
                 &aad,
                 &mut self.buffer[..18],
@@ -225,7 +224,7 @@ impl VmessHeaderReader {
             }
             debug_log!("vmess: try aead header decrypt data");
             let aad = [0u8; 0];
-            if !self.resp_header_payload_enc.decrypt_slice(
+            if !self.resp_header_payload_enc.decrypt_inplace_with_slice(
                 &self.header_payload_iv,
                 &aad,
                 &mut self.buffer[..self.data_length + 16],
@@ -272,7 +271,7 @@ mod vmess_tests {
     use crate::proxy::decode_hex;
     use crate::proxy::vmess::aead_header::{create_auth_id, seal_vmess_aead_header};
     use bytes::{BufMut, BytesMut};
-    use crypto2::hash::sha256;
+    use crate::common::sha256;
 
     #[test]
     fn test_create_auth_id() {

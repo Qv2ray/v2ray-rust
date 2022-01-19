@@ -1,18 +1,11 @@
 #[macro_export]
 macro_rules! md5 {
     ($($x:expr),*) => {{
-        let mut digest = crypto2::hash::Md5::new();
+        use md5::{Md5, Digest};
+        let mut digest = Md5::new();
         $(digest.update($x);)*
-        digest.finalize()
-    }}
-}
-
-#[macro_export]
-macro_rules! md5_with_digest {
-    ($($x:expr),*) => {{
-        let mut digest = crypto2::hash::Md5::new();
-        $(digest.update($x);)*
-        (digest,digest.finalize())
+        let res:[u8;16]=digest.finalize().into();
+        res
     }}
 }
 

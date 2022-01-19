@@ -4,11 +4,10 @@ use std::io;
 use std::io::{Error, ErrorKind};
 use std::pin::Pin;
 use std::task::{Context, Poll};
+use aes_gcm::Aes128Gcm;
 
 use bytes::{BufMut, BytesMut};
-use crypto2::aeadcipher::Chacha20Poly1305;
-use crypto2::blockmode::Aes128Gcm;
-use crypto2::hash::Sha256;
+use chacha20poly1305::ChaCha20Poly1305;
 
 use crate::common::fnv1a::Fnv1aHasher;
 use crate::common::net::PollUtil;
@@ -22,6 +21,8 @@ use crate::{
 use generator::state_machine_generator;
 use rand::random;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
+use crate::common::aead_helper::AeadCipherHelper;
+use crate::common::sha256;
 
 pub const MAX_SIZE: usize = 17 * 1024;
 pub const CHUNK_SIZE: usize = 1 << 14;
@@ -109,8 +110,8 @@ impl<S> VmessStream<S> {
         let reader: VmessAeadReader;
         let writer: VmessAeadWriter;
         debug_log!("req body key in salt:{:02X?}", &salt[16..32]);
-        let resp_body_key = Sha256::oneshot(&salt[16..32]);
-        let resp_body_iv = Sha256::oneshot(&salt[0..16]);
+        let resp_body_key = sha256(&salt[16..32]);
+        let resp_body_iv = sha256(&salt[0..16]);
         debug_log!("resp body key:{:02X?}", &resp_body_key[..16]);
         salt[32..48].copy_from_slice(&resp_body_key[..16]);
         salt[48..64].copy_from_slice(&resp_body_iv[..16]);
@@ -122,9 +123,9 @@ impl<S> VmessStream<S> {
         let resp_body_iv = &salt[48..];
         match vmess_option.security_num {
             AES_128_GCM_SECURITY_NUM => {
-                writer_cipher = VmessSecurity::Aes128Gcm(Aes128Gcm::new(req_body_key));
+                writer_cipher = VmessSecurity::Aes128Gcm(Aes128Gcm::new_with_slice(req_body_key));
                 writer = VmessAeadWriter::new(req_body_iv, writer_cipher);
-                reader_cipher = VmessSecurity::Aes128Gcm(Aes128Gcm::new(resp_body_key));
+                reader_cipher = VmessSecurity::Aes128Gcm(Aes128Gcm::new_with_slice(resp_body_key));
                 reader = VmessAeadReader::new(resp_body_iv, reader_cipher);
             }
             CHACHA20POLY1305_SECURITY_NUM => {
@@ -133,14 +134,14 @@ impl<S> VmessStream<S> {
                 key[0..16].copy_from_slice(&tmp);
                 let tmp = md5!(&key[16..]);
                 key[16..32].copy_from_slice(&tmp);
-                writer_cipher = VmessSecurity::ChaCha20Poly1305(Chacha20Poly1305::new(&key));
+                writer_cipher = VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
                 writer = VmessAeadWriter::new(req_body_iv, writer_cipher);
 
                 let tmp = md5!(resp_body_key);
                 key[0..16].copy_from_slice(&tmp);
                 let tmp = md5!(&key[16..]);
                 key[16..32].copy_from_slice(&tmp);
-                reader_cipher = VmessSecurity::ChaCha20Poly1305(Chacha20Poly1305::new(&key));
+                reader_cipher = VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
                 reader = VmessAeadReader::new(resp_body_iv, reader_cipher);
             }
             _ => {
