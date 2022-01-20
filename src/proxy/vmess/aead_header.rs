@@ -2,9 +2,11 @@ use bytes::{Buf, BufMut, BytesMut};
 use std::convert::TryFrom;
 use std::slice::from_raw_parts_mut;
 
-use crate::{debug_log, impl_read_utils, LW_BUFFER_SIZE};
+use crate::{debug_log, impl_read_utils};
 
+use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::net::PollUtil;
+use crate::common::{random_iv_or_salt, BlockCipherHelper, AES_128_GCM_TAG_LEN, LW_BUFFER_SIZE};
 use crate::proxy::vmess::kdf::{
     vmess_kdf_1_one_shot, vmess_kdf_3_one_shot, KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_IV,
     KDF_SALT_CONST_AEAD_RESP_HEADER_LEN_KEY, KDF_SALT_CONST_AEAD_RESP_HEADER_PAYLOAD_IV,
@@ -13,23 +15,19 @@ use crate::proxy::vmess::kdf::{
     KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_IV,
     KDF_SALT_CONST_VMESS_HEADER_PAYLOAD_LENGTH_AEAD_KEY,
 };
+use aes::Aes128;
+use aes_gcm::Aes128Gcm;
 use futures_util::ready;
 use generator::state_machine_generator;
-use shadowsocks_crypto::v1::random_iv_or_salt;
 use std::io::ErrorKind;
 use std::task::{Context, Poll};
 use std::{cmp, io};
-use aes::Aes128;
-use aes_gcm::Aes128Gcm;
 use tokio::io::{AsyncRead, ReadBuf};
-use crate::common::{AES_128_GCM_TAG_LEN, BlockCipherHelper};
-use crate::common::aead_helper::AeadCipherHelper;
 
 fn create_auth_id(cmd_key: &[u8], time: &[u8]) -> BytesMut {
     let mut buf = BytesMut::new();
     buf.put_slice(time);
     let mut random_bytes = [0u8; 4];
-    #[cfg(not(test))]
     random_iv_or_salt(&mut random_bytes);
     buf.put_slice(&random_bytes);
     let zero = crc32fast::hash(&*buf);
@@ -56,7 +54,6 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8], data: &[u8]) -> BytesMut {
     let mut generated_auth_id = create_auth_id(cmd_key, &time);
     let id_len = generated_auth_id.len();
     let mut connection_nonce = [0u8; 8];
-    #[cfg(not(test))]
     random_iv_or_salt(&mut connection_nonce);
 
     // reserve (header_length + nonce + data + 2*tag) bytes
@@ -268,10 +265,10 @@ impl VmessHeaderReader {
 
 #[cfg(test)]
 mod vmess_tests {
+    use crate::common::sha256;
     use crate::proxy::decode_hex;
     use crate::proxy::vmess::aead_header::{create_auth_id, seal_vmess_aead_header};
     use bytes::{BufMut, BytesMut};
-    use crate::common::sha256;
 
     #[test]
     fn test_create_auth_id() {

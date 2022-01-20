@@ -1,29 +1,29 @@
-
+use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use tokio::io::{AsyncRead, AsyncWrite};
-use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
-use tokio_tungstenite::{
-    client_async,client_async_with_config,
-    tungstenite::http::{StatusCode, Uri},
-};
 
+use tokio_tungstenite::{client_async_with_config, tungstenite::Message, WebSocketStream};
+
+use crate::common::new_error;
+use crate::proxy::{BoxProxyStream, ChainableStreamBuilder, ProxySteam};
+use crate::{debug_log};
+use futures_util::ready;
 use futures_util::sink::Sink;
+use futures_util::Stream;
 use std::{
     io,
     pin::Pin,
     task::{Context, Poll},
 };
-use futures_util::ready;
-use futures_util::Stream;
-use crate::common::new_error;
+use tokio_tungstenite::tungstenite::http::{Request, StatusCode, Uri};
+use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
 
-
-pub struct BinaryWsStream<T: AsyncRead + AsyncWrite + Unpin> {
+pub struct BinaryWsStream<T: ProxySteam> {
     inner: WebSocketStream<T>,
     read_buffer: Option<Bytes>,
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin > AsyncRead for BinaryWsStream<T> {
+impl<T: ProxySteam> AsyncRead for BinaryWsStream<T> {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -58,7 +58,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin > AsyncRead for BinaryWsStream<T> {
                     }
                 }
                 Message::Close(_) => {
-                    return Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()));
+                    return Poll::Ready(Ok(()));
                 }
                 _ => {
                     return Poll::Ready(Err(new_error(format!(
@@ -71,7 +71,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin > AsyncRead for BinaryWsStream<T> {
     }
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin + Send + Sync> AsyncWrite for BinaryWsStream<T> {
+impl<T: ProxySteam> AsyncWrite for BinaryWsStream<T> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -97,6 +97,7 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send + Sync> AsyncWrite for BinaryWsStr
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<(), io::Error>> {
+        debug_log!("shut down");
         ready!(Pin::new(&mut self.inner).poll_ready(cx))
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))?;
         let message = Message::Close(None);
@@ -105,15 +106,72 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send + Sync> AsyncWrite for BinaryWsStr
         let inner = Pin::new(&mut self.inner);
         inner
             .poll_close(cx)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("{:?}", e)))
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("close {:?}", e)))
     }
 }
 
-impl<T: AsyncRead + AsyncWrite + Unpin + Send + Sync> BinaryWsStream<T> {
+impl<T: ProxySteam> BinaryWsStream<T> {
     pub fn new(inner: WebSocketStream<T>) -> Self {
         return Self {
             inner,
             read_buffer: None,
         };
+    }
+}
+
+#[derive(Clone)]
+pub struct BinaryWsStreamBuilder {
+    uri:Uri,
+    headers:Vec<(String,String)>,
+    ws_config: Option<WebSocketConfig>,
+}
+
+impl BinaryWsStreamBuilder {
+    pub fn new(
+        uri: &str,
+        ws_config: Option<WebSocketConfig>,
+        headers:Vec<(String,String)>
+    ) -> anyhow::Result<BinaryWsStreamBuilder> {
+        let uri: Uri = uri.parse()?;
+        Ok(BinaryWsStreamBuilder {uri,headers, ws_config})
+    }
+
+    fn req(uri:Uri,headers:&Vec<(String,String)>)->Request<()>{
+        let mut request = Request::builder()
+                //.method("GET")
+                .uri(uri);
+        for (k,v) in headers{
+            if k!="Host"{
+                request = request.header(k.as_str(),v.as_str());
+            }
+        }
+        request.body(()).unwrap()
+    }
+}
+
+#[async_trait]
+impl ChainableStreamBuilder for BinaryWsStreamBuilder {
+    async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+        let req = BinaryWsStreamBuilder::req(self.uri.clone(),&self.headers);
+        let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
+            .await
+            .map_err(|e| new_error(e))?;
+        if resp.status() != StatusCode::SWITCHING_PROTOCOLS {
+            return Err(new_error(format!("bad status: {}", resp.status())));
+        }
+        debug_log!("build ws stream success");
+        Ok(Box::new(BinaryWsStream::new(stream)))
+    }
+
+    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+        unimplemented!()
+    }
+
+    fn into_box(self) -> Box<dyn ChainableStreamBuilder> {
+        Box::new(self)
+    }
+
+    fn clone_box(&self) -> Box<dyn ChainableStreamBuilder> {
+        Box::new(self.clone())
     }
 }

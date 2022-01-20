@@ -13,25 +13,18 @@ use bytes::{Buf, BufMut, BytesMut};
 use crate::common::{net::PollUtil, LW_BUFFER_SIZE};
 use futures_util::ready;
 use generator::state_machine_generator;
-use shadowsocks_crypto::v1::{Cipher, CipherKind};
 
-use crate::impl_read_utils;
+use crate::proxy::shadowsocks::aead_helper::{AeadCipher, CipherKind};
+use crate::{impl_read_utils};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// AEAD packet payload must be smaller than 0x3FFF
 pub const MAX_PACKET_SIZE: usize = 0x3FFF;
 
-#[derive(Debug)]
-enum DecryptReadStep {
-    Init,
-    Length,
-    Data(usize),
-    Eof,
-}
 /// Reader wrapper that will decrypt data automatically
 pub struct DecryptedReader {
     buffer: BytesMut,
-    cipher: Cipher,
+    cipher: AeadCipher,
     tag_size: usize,
     state: u32,
     data_length: usize,
@@ -41,10 +34,10 @@ pub struct DecryptedReader {
 }
 
 impl DecryptedReader {
-    pub fn new(method: CipherKind, key: &[u8], nonce: &[u8]) -> DecryptedReader {
+    pub fn new(method: CipherKind, key: &[u8], iv_or_salt: &[u8]) -> DecryptedReader {
         DecryptedReader {
             buffer: BytesMut::with_capacity(LW_BUFFER_SIZE * 2),
-            cipher: Cipher::new(method, key, nonce),
+            cipher: AeadCipher::new(method, key, iv_or_salt),
             tag_size: method.tag_len(),
             state: 0,
             data_length: 0,
@@ -103,7 +96,7 @@ impl DecryptedReader {
             }
             if !self
                 .cipher
-                .decrypt_packet(&mut self.buffer.as_mut()[0..self.data_length])
+                .decrypt(&mut self.buffer.as_mut()[0..self.data_length])
             {
                 return Poll::Ready(Err(io::Error::new(
                     io::ErrorKind::Other,
@@ -121,9 +114,9 @@ impl DecryptedReader {
         }
     }
 
-    fn decrypt_length(cipher: &mut Cipher, m: &mut [u8]) -> io::Result<usize> {
+    fn decrypt_length(cipher: &mut AeadCipher, m: &mut [u8]) -> io::Result<usize> {
         let plen = {
-            if !cipher.decrypt_packet(m) {
+            if !cipher.decrypt(m) {
                 return Err(io::Error::new(ErrorKind::Other, "invalid tag-in"));
             }
 
@@ -150,7 +143,7 @@ enum EncryptWriteStep {
 
 /// Writer wrapper that will encrypt data automatically
 pub struct EncryptedWriter {
-    cipher: Cipher,
+    cipher: AeadCipher,
     tag_size: usize,
     state: u32, // for state machine generator use
     steps: EncryptWriteStep,
@@ -162,13 +155,13 @@ pub struct EncryptedWriter {
 
 impl EncryptedWriter {
     /// Creates a new EncryptedWriter
-    pub fn new(method: CipherKind, key: &[u8], nonce: &[u8]) -> EncryptedWriter {
+    pub fn new(method: CipherKind, key: &[u8], iv_or_salt: &[u8]) -> EncryptedWriter {
         // nonce should be sent with the first packet
         let mut buf = BytesMut::with_capacity(LW_BUFFER_SIZE * 2);
-        buf.put(nonce);
+        buf.put(iv_or_salt);
 
         EncryptedWriter {
-            cipher: Cipher::new(method, key, nonce),
+            cipher: AeadCipher::new(method, key, iv_or_salt),
             tag_size: method.tag_len(),
             state: 0,
             steps: EncryptWriteStep::Nothing,
@@ -233,13 +226,13 @@ impl EncryptedWriter {
         let mbuf = &mut self.buf.chunk_mut()[..2 + self.tag_size];
         let mbuf = unsafe { slice::from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         self.buf.put_u16(self.data_len as u16);
-        self.cipher.encrypt_packet(mbuf);
+        self.cipher.encrypt(mbuf);
         unsafe { self.buf.advance_mut(self.tag_size) };
         //2. encrypt data
         let mbuf = &mut self.buf.chunk_mut()[..self.data_len + self.tag_size];
         let mbuf = unsafe { slice::from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         self.buf.put_slice(data);
-        self.cipher.encrypt_packet(mbuf);
+        self.cipher.encrypt(mbuf);
         unsafe {
             self.buf.advance_mut(self.tag_size);
         }

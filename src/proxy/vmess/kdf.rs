@@ -1,8 +1,7 @@
-use sha2::Sha256;
 use hmac::Hmac;
 use hmac::Mac;
-use generic_array::GenericArray;
-type HmacSha256=Hmac<Sha256>;
+use sha2::Sha256;
+type HmacSha256 = Hmac<Sha256>;
 
 const IPAD: u8 = 0x36;
 const OPAD: u8 = 0x5C;
@@ -137,7 +136,10 @@ impl_hmac_with_hasher!(VmessKdf3, VmessKdf2);
 
 #[inline]
 fn get_vmess_kdf_1(key1: &[u8]) -> VmessKdf1 {
-    VmessKdf1::new(HmacSha256::new_from_slice(KDF_SALT_CONST_VMESS_AEAD_KDF).unwrap(), key1)
+    VmessKdf1::new(
+        HmacSha256::new_from_slice(KDF_SALT_CONST_VMESS_AEAD_KDF).unwrap(),
+        key1,
+    )
 }
 
 pub fn vmess_kdf_1_one_shot(id: &[u8], key1: &[u8]) -> [u8; 32] {
@@ -161,12 +163,7 @@ fn get_vmess_kdf_3(key1: &[u8], key2: &[u8], key3: &[u8]) -> VmessKdf3 {
     VmessKdf3::new(get_vmess_kdf_2(key1, key2), key3)
 }
 
-pub fn vmess_kdf_3_one_shot(
-    id: &[u8],
-    key1: &[u8],
-    key2: &[u8],
-    key3: &[u8],
-) -> [u8; 32] {
+pub fn vmess_kdf_3_one_shot(id: &[u8], key1: &[u8], key2: &[u8], key3: &[u8]) -> [u8; 32] {
     let mut h = get_vmess_kdf_3(key1, key2, key3);
     h.update(id);
     h.finalize()

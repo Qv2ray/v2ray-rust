@@ -7,6 +7,7 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+async-trait = "0.1"
 actix = "0.10.0"
 tokio-tungstenite = {version="*",features=["stream"],default-features = false}
 actix-http = { version = "3.0.0-beta.5", features = ["rustls"]}
@@ -20,7 +21,8 @@ snmalloc-rs = "0.2.6"
 anyhow = "1.0"
 bytes = "1"
 rand = { version = "0.7", features = ["small_rng"] }
-#crypto2 = "0.1.2"
+hkdf = "0.12.0"
+sha-1 = "0.10.0"
 num_cpus = "1.13.0"
 tokio = {version="1", features=["net","io-util","macros"]}
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
@@ -37,15 +39,10 @@ uuid = { version="0.8", features=["std"]}
 aead = "0.4.3"
 generic-array = "0.14.5"
 hmac = "0.12.0"
+tokio-boring = "2.1.4"
+webpki = "0.22.0"
+boring = "2.0.0"
 domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
 cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
 generator={git="https://github.com/darsvador/generator/"}
 
-[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
-shadowsocks-crypto = { version = "0.2.5", features = ["ring"] }
-
-[target.'cfg(any(target_arch = "arm", target_arch = "aarch64"))'.dependencies]
-shadowsocks-crypto = { version = "0.2.5", features = ["ring"] }
-
-[target.'cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "arm", target_arch = "aarch64")))'.dependencies]
-shadowsocks-crypto = { version = "0.2.5", features = [] }

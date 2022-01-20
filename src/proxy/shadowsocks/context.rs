@@ -93,19 +93,19 @@ impl PingPongBloom {
 }
 
 /// Shared basic configuration for the whole server
-pub struct Context {
+pub struct BloomContext {
     // Check for duplicated IV/Nonce, for prevent replay attack
     // https://github.com/shadowsocks/shadowsocks-org/issues/44
     nonce_ppbloom: SpinMutex<PingPongBloom>,
 }
 
 /// Unique context thw whole server
-pub type SharedContext = Arc<Context>;
+pub type SharedBloomContext = Arc<BloomContext>;
 
-impl Context {
+impl BloomContext {
     /// Create a non-shared Context
-    pub fn new(is_local: bool) -> Context {
-        Context {
+    pub fn new(is_local: bool) -> BloomContext {
+        BloomContext {
             nonce_ppbloom: SpinMutex::new(PingPongBloom::new(is_local)),
         }
     }

@@ -1,22 +1,22 @@
+use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::net::PollUtil;
 use crate::proxy::show_utf8_lossy;
 use crate::proxy::vmess::vmess::{CHUNK_SIZE, MAX_SIZE};
-use crate::{debug_log, impl_read_utils, LW_BUFFER_SIZE};
+use crate::{debug_log, impl_read_utils};
+use aes_gcm::Aes128Gcm;
 use bytes::{Buf, BufMut, BytesMut};
+use chacha20poly1305::ChaCha20Poly1305;
 use futures_util::ready;
 use generator::state_machine_generator;
 use std::io::ErrorKind;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{cmp, io, slice};
-use aes_gcm::Aes128Gcm;
-use chacha20poly1305::ChaCha20Poly1305;
-use aead::AeadCore;
-use crate::common::aead_helper::AeadCipherHelper;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use crate::common::LW_BUFFER_SIZE;
 
-pub const AES_128_GCM_OVERHEAD: usize = 16;
-pub const CHACHA20POLY1305_GCM_OVERHEAD: usize = 16;
+//pub const AES_128_GCM_OVERHEAD: usize = 16;
+//pub const CHACHA20POLY1305_GCM_OVERHEAD: usize = 16;
 pub struct VmessAeadWriter {
     security: VmessSecurity,
     buffer: BytesMut,
@@ -35,7 +35,6 @@ pub enum VmessSecurity {
 }
 
 impl VmessSecurity {
-
     #[inline(always)]
     pub fn overhead_len(&self) -> usize {
         16

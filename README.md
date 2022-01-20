@@ -33,12 +33,17 @@ An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 
 ### VLESS
 - ❌ 
- 
+
+### Chainable Steam
+- ✅
+
+
+
 ### Stream settings
 
 - 🚧 TLS
 - 🚧 HTTP/2
-- 🚧 WebSocket
+- ✅ WebSocket
 - ❌ QUIC
 - ❌ DomainSocket
 - ❌ mKCP

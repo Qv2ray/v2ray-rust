@@ -54,23 +54,25 @@ macro_rules! impl_async_read {
         }
     };
 }
-#[macro_export]
-macro_rules! impl_split_stream {
-    ($name:tt) => {
-        impl<S> $name<S>
-        where
-            S: AsyncRead + AsyncWrite + Unpin,
-        {
-            pub fn split(self) -> (ReadHalf<$name<S>>, WriteHalf<$name<S>>) {
-                tokio::io::split(self)
-            }
-        }
-    };
-}
+
+// #[macro_export]
+// macro_rules! impl_split_stream {
+//     ($name:tt) => {
+//         impl<S> $name<S>
+//         where
+//             S: AsyncRead + AsyncWrite + Unpin,
+//         {
+//             pub fn split(self) -> (ReadHalf<$name<S>>, WriteHalf<$name<S>>) {
+//                 tokio::io::split(self)
+//             }
+//         }
+//     };
+// }
+
 #[macro_export]
 macro_rules! impl_async_useful_traits {
     ($name:tt) => {
-        impl_split_stream!($name);
+        //impl_split_stream!($name);
         impl_async_read!($name);
         impl_async_write!($name);
     };

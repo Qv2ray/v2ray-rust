@@ -1,5 +1,5 @@
 use crate::common::LW_BUFFER_SIZE;
-use crate::proxy::socks::{auth_methods, response_code, socks_command, Address, SOCKS_VERSION};
+use crate::proxy::socks::{auth_methods, response_code, socks_command, SOCKS_VERSION};
 use bytes::{BufMut, BytesMut};
 
 use std::collections::HashMap;
@@ -7,6 +7,7 @@ use std::io;
 use std::io::Error;
 use std::net::SocketAddr;
 
+use crate::proxy::Address;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub struct Socks5Stream<S> {

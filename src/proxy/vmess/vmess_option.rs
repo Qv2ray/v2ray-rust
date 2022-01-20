@@ -1,7 +1,9 @@
-use crate::Address;
+use crate::proxy::Address;
 use anyhow::anyhow;
 use anyhow::Result;
 use uuid::Uuid;
+
+#[derive(Clone)]
 pub struct VmessOption {
     pub uuid: Uuid,
     pub alter_id: u16,

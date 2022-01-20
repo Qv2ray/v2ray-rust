@@ -9,20 +9,19 @@ use std::{
 
 use bytes::{Bytes, BytesMut};
 
-use shadowsocks_crypto::v1::{random_iv_or_salt, CipherCategory, CipherKind};
-
 use super::aead::{DecryptedReader as AeadDecryptedReader, EncryptedWriter as AeadEncryptedWriter};
 use crate::common::net::poll_read_buf;
-use crate::proxy::shadowsocks::context::SharedContext;
+use crate::proxy::shadowsocks::context::SharedBloomContext;
 
 use futures_util::ready;
 use std::io::{Error, ErrorKind};
 
+use crate::common::random_iv_or_salt;
 use crate::{
-    impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
-    impl_split_stream,
+    impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown
 };
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
+use crate::proxy::shadowsocks::aead_helper::CipherKind;
 
 enum DecryptedReader {
     None,
@@ -39,7 +38,7 @@ enum ReadStatus {
     /// Waiting for initializing vector (or nonce for AEAD ciphers)
     ///
     /// (context, Buffer, already_read_bytes, method, key)
-    WaitIv(SharedContext, BytesMut, CipherKind, Bytes),
+    WaitIv(SharedBloomContext, BytesMut, CipherKind, Bytes),
 
     /// Connection is established, DecryptedReader is initialized
     Established,
@@ -58,25 +57,22 @@ impl<S: Unpin> Unpin for CryptoStream<S> {}
 impl<S> CryptoStream<S> {
     /// Create a new CryptoStream with the underlying stream connection
     pub fn new(
-        context: SharedContext,
+        context: SharedBloomContext,
         stream: S,
         enc_key: Bytes,
         method: CipherKind,
     ) -> CryptoStream<S> {
-        let category = method.category();
         let key = enc_key;
 
-        if category == CipherCategory::None {
+        if method == CipherKind::None {
             return CryptoStream::<S>::new_none(stream);
         }
 
-        let prev_len = match category {
-            CipherCategory::Aead => method.salt_len(),
-            _ => 0,
-        };
+        let prev_len = method.salt_len();
 
-        let iv = match category {
-            CipherCategory::Aead => {
+        let iv = match method {
+            CipherKind::None => Vec::new(),
+            _ => {
                 let local_salt = loop {
                     let mut salt = vec![0u8; prev_len];
                     if prev_len > 0 {
@@ -92,14 +88,11 @@ impl<S> CryptoStream<S> {
                 //trace!("generated AEAD cipher salt {:?}", ByteStr::new(&local_salt));
                 local_salt
             }
-            _ => Vec::new(),
         };
 
-        let enc = match category {
-            CipherCategory::Aead => {
-                EncryptedWriter::Aead(AeadEncryptedWriter::new(method, &key, &iv))
-            }
-            _ => EncryptedWriter::None,
+        let enc = match method {
+            CipherKind::None => EncryptedWriter::None,
+            _ => EncryptedWriter::Aead(AeadEncryptedWriter::new(method, &key, &iv)),
         };
 
         CryptoStream {
@@ -137,7 +130,7 @@ impl<S> CryptoStream<S> {
 
 impl<S> CryptoStream<S>
 where
-    S: AsyncReadExt + Unpin,
+    S: AsyncRead + Unpin,
 {
     fn poll_read_handshake(&mut self, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         if let ReadStatus::WaitIv(ref ctx, ref mut buf, method, ref key) = self.read_status {
@@ -154,12 +147,12 @@ where
                 let err = Error::new(ErrorKind::Other, "detected repeated iv/salt");
                 return Poll::Ready(Err(err));
             }
-            let dec = match method.category() {
-                CipherCategory::Aead => {
+            let dec = match method {
+                CipherKind::None => DecryptedReader::None,
+                _ => {
                     //trace!("got AEAD cipher salt {:?}", ByteStr::new(nonce));
                     DecryptedReader::Aead(AeadDecryptedReader::new(method, key, nonce))
                 }
-                _ => DecryptedReader::None,
             };
             self.dec = Some(dec);
             self.read_status = ReadStatus::Established;

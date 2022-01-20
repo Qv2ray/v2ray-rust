@@ -1,38 +1,37 @@
-use shadowsocks_crypto::v1::random_iv_or_salt;
+use aes_gcm::Aes128Gcm;
 use std::hash::Hasher;
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use aes_gcm::Aes128Gcm;
 
 use bytes::{BufMut, BytesMut};
 use chacha20poly1305::ChaCha20Poly1305;
 
+use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::fnv1a::Fnv1aHasher;
 use crate::common::net::PollUtil;
+use crate::common::{random_iv_or_salt, sha256};
 use crate::proxy::vmess::aead::{VmessAeadReader, VmessAeadWriter, VmessSecurity};
 use crate::proxy::vmess::aead_header::{seal_vmess_aead_header, VmessHeaderReader};
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::{
     debug_log, impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
-    impl_split_stream, md5,
+    md5,
 };
 use generator::state_machine_generator;
 use rand::random;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
-use crate::common::aead_helper::AeadCipherHelper;
-use crate::common::sha256;
 
 pub const MAX_SIZE: usize = 17 * 1024;
 pub const CHUNK_SIZE: usize = 1 << 14;
-pub const LEN_SIZE: usize = 2;
 pub const VERSION: u8 = 1;
 pub const OPT_CHUNK_STREAM: u8 = 1;
 pub const COMMAND_UDP: u8 = 0x02;
 pub const COMMAND_TCP: u8 = 0x01;
 pub const AES_128_GCM_SECURITY_NUM: u8 = 0x03;
 pub const CHACHA20POLY1305_SECURITY_NUM: u8 = 0x04;
+#[allow(dead_code)]
 pub const NONE_SECURITY_NUM: u8 = 0x05;
 
 pub struct VmessStream<S> {
@@ -93,14 +92,14 @@ impl<S> VmessStream<S> {
     pub fn req_body_key(&self) -> &[u8] {
         &self.salt[16..32]
     }
-    #[inline]
-    pub fn resp_body_key(&self) -> &[u8] {
-        &self.salt[32..48]
-    }
-    #[inline]
-    pub fn resp_body_iv(&self) -> &[u8] {
-        &self.salt[48..]
-    }
+    // #[inline]
+    // pub fn resp_body_key(&self) -> &[u8] {
+    //     &self.salt[32..48]
+    // }
+    // #[inline]
+    // pub fn resp_body_iv(&self) -> &[u8] {
+    //     &self.salt[48..]
+    // }
     pub fn new(vmess_option: VmessOption, stream: S) -> VmessStream<S> {
         let mut salt = [0u8; 64];
         random_iv_or_salt(&mut salt);
@@ -134,14 +133,16 @@ impl<S> VmessStream<S> {
                 key[0..16].copy_from_slice(&tmp);
                 let tmp = md5!(&key[16..]);
                 key[16..32].copy_from_slice(&tmp);
-                writer_cipher = VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
+                writer_cipher =
+                    VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
                 writer = VmessAeadWriter::new(req_body_iv, writer_cipher);
 
                 let tmp = md5!(resp_body_key);
                 key[0..16].copy_from_slice(&tmp);
                 let tmp = md5!(&key[16..]);
                 key[16..32].copy_from_slice(&tmp);
-                reader_cipher = VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
+                reader_cipher =
+                    VmessSecurity::ChaCha20Poly1305(ChaCha20Poly1305::new_with_slice(&key));
                 reader = VmessAeadReader::new(resp_body_iv, reader_cipher);
             }
             _ => {

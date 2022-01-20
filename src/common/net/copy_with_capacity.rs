@@ -38,27 +38,27 @@ where
     .await
 }
 
-pub async fn copy_with_capacity<'a, R, W>(
-    reader: &'a mut R,
-    writer: &'a mut W,
-    buf_capacity: usize,
-) -> io::Result<u64>
-where
-    R: AsyncRead + Unpin + ?Sized,
-    W: AsyncWrite + Unpin + ?Sized,
-{
-    let mut amt = 0u64;
-    CopyWithCapacity {
-        reader,
-        read_done: false,
-        writer,
-        amt: &mut amt,
-        pos: 0,
-        cap: 0,
-        buf: vec![0; buf_capacity].into_boxed_slice(),
-    }
-    .await
-}
+// pub async fn copy_with_capacity<'a, R, W>(
+//     reader: &'a mut R,
+//     writer: &'a mut W,
+//     buf_capacity: usize,
+// ) -> io::Result<u64>
+// where
+//     R: AsyncRead + Unpin + ?Sized,
+//     W: AsyncWrite + Unpin + ?Sized,
+// {
+//     let mut amt = 0u64;
+//     CopyWithCapacity {
+//         reader,
+//         read_done: false,
+//         writer,
+//         amt: &mut amt,
+//         pos: 0,
+//         cap: 0,
+//         buf: vec![0; buf_capacity].into_boxed_slice(),
+//     }
+//     .await
+// }
 
 impl<R, W> Future for CopyWithCapacity<'_, R, W>
 where
