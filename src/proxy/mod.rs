@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use bytes::{Buf, BufMut, BytesMut};
 use std::fmt::{Debug, Formatter};
 use std::io::{Cursor, Error, ErrorKind};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
 use std::num::ParseIntError;
 use std::str::FromStr;
 use std::vec;
@@ -11,9 +11,11 @@ use std::{fmt, io};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
+pub mod direct;
 pub mod shadowsocks;
 pub mod socks;
 pub mod tls;
+pub mod trojan;
 pub mod vmess;
 pub mod websocket;
 
@@ -92,6 +94,10 @@ impl Address {
     pub const ADDR_TYPE_IPV4: u8 = 1;
     pub const ADDR_TYPE_DOMAIN_NAME: u8 = 3;
     pub const ADDR_TYPE_IPV6: u8 = 4;
+    #[inline]
+    fn new_dummy_address() -> Address {
+        Address::SocketAddress(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0))
+    }
 
     #[inline]
     fn serialized_len(&self) -> usize {

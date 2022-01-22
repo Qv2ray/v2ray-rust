@@ -1,6 +1,6 @@
 use crate::common::new_error;
+use crate::debug_log;
 use crate::proxy::{BoxProxyStream, ChainableStreamBuilder};
-use crate::{debug_log,};
 use async_trait::async_trait;
 use boring::ssl::ConnectConfiguration;
 use boring::ssl::SslConnector;
@@ -36,7 +36,9 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
         let dns_name = std::str::from_utf8(dns_name.as_ref()).unwrap();
         println!("dnsname:{}", dns_name);
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
-        configuration.set_alpn_protos(b"\x06spdy/1\x08http/1.1");
+        configuration
+            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
+            .unwrap();
         let configuration = configuration.build().configure().unwrap();
         let stream = connect(configuration, dns_name, io).await;
         match stream {
@@ -65,10 +67,10 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
 #[cfg(test)]
 mod tests {
     use crate::proxy::tls::tls::TlsStreamBuilder;
+    use crate::proxy::ChainableStreamBuilder;
     use std::net::ToSocketAddrs;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
-    use crate::proxy::ChainableStreamBuilder;
 
     #[tokio::test]
     async fn test_tls() {

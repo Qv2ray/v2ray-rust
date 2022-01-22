@@ -1,9 +1,9 @@
+use crate::proxy::vmess::vmess::VmessStream;
+use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use crate::proxy::vmess::vmess::VmessStream;
-use crate::proxy::vmess::vmess_option::VmessOption;
 
 mod aead;
 mod aead_header;

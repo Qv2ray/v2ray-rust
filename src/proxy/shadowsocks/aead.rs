@@ -14,8 +14,8 @@ use crate::common::{net::PollUtil, LW_BUFFER_SIZE};
 use futures_util::ready;
 use generator::state_machine_generator;
 
+use crate::impl_read_utils;
 use crate::proxy::shadowsocks::aead_helper::{AeadCipher, CipherKind};
-use crate::{impl_read_utils};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 /// AEAD packet payload must be smaller than 0x3FFF

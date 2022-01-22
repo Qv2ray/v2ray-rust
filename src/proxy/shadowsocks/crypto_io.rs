@@ -17,11 +17,9 @@ use futures_util::ready;
 use std::io::{Error, ErrorKind};
 
 use crate::common::random_iv_or_salt;
-use crate::{
-    impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown
-};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
+use crate::{impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
 
 enum DecryptedReader {
     None,

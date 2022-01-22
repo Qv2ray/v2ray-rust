@@ -5,8 +5,8 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_tungstenite::{client_async_with_config, tungstenite::Message, WebSocketStream};
 
 use crate::common::new_error;
+use crate::debug_log;
 use crate::proxy::{BoxProxyStream, ChainableStreamBuilder, ProxySteam};
-use crate::{debug_log};
 use futures_util::ready;
 use futures_util::sink::Sink;
 use futures_util::Stream;
@@ -121,8 +121,8 @@ impl<T: ProxySteam> BinaryWsStream<T> {
 
 #[derive(Clone)]
 pub struct BinaryWsStreamBuilder {
-    uri:Uri,
-    headers:Vec<(String,String)>,
+    uri: Uri,
+    headers: Vec<(String, String)>,
     ws_config: Option<WebSocketConfig>,
 }
 
@@ -130,19 +130,23 @@ impl BinaryWsStreamBuilder {
     pub fn new(
         uri: &str,
         ws_config: Option<WebSocketConfig>,
-        headers:Vec<(String,String)>
+        headers: Vec<(String, String)>,
     ) -> anyhow::Result<BinaryWsStreamBuilder> {
         let uri: Uri = uri.parse()?;
-        Ok(BinaryWsStreamBuilder {uri,headers, ws_config})
+        Ok(BinaryWsStreamBuilder {
+            uri,
+            headers,
+            ws_config,
+        })
     }
 
-    fn req(uri:Uri,headers:&Vec<(String,String)>)->Request<()>{
+    fn req(uri: Uri, headers: &Vec<(String, String)>) -> Request<()> {
         let mut request = Request::builder()
-                //.method("GET")
-                .uri(uri);
-        for (k,v) in headers{
-            if k!="Host"{
-                request = request.header(k.as_str(),v.as_str());
+            //.method("GET")
+            .uri(uri);
+        for (k, v) in headers {
+            if k != "Host" {
+                request = request.header(k.as_str(), v.as_str());
             }
         }
         request.body(()).unwrap()
@@ -152,7 +156,7 @@ impl BinaryWsStreamBuilder {
 #[async_trait]
 impl ChainableStreamBuilder for BinaryWsStreamBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        let req = BinaryWsStreamBuilder::req(self.uri.clone(),&self.headers);
+        let req = BinaryWsStreamBuilder::req(self.uri.clone(), &self.headers);
         let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
             .await
             .map_err(|e| new_error(e))?;

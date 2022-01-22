@@ -1,5 +1,6 @@
 use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::net::PollUtil;
+use crate::common::LW_BUFFER_SIZE;
 use crate::proxy::show_utf8_lossy;
 use crate::proxy::vmess::vmess::{CHUNK_SIZE, MAX_SIZE};
 use crate::{debug_log, impl_read_utils};
@@ -13,7 +14,6 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use std::{cmp, io, slice};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-use crate::common::LW_BUFFER_SIZE;
 
 //pub const AES_128_GCM_OVERHEAD: usize = 16;
 //pub const CHACHA20POLY1305_GCM_OVERHEAD: usize = 16;

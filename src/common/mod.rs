@@ -1,9 +1,9 @@
+use crate::debug_log;
 use aes::{Aes128, BlockDecrypt, BlockEncrypt, NewBlockCipher};
 use generic_array::GenericArray;
 use sha2::Digest;
 use sha2::{Sha224, Sha256};
 use std::io;
-use crate::debug_log;
 
 pub mod aead_helper;
 pub mod fnv1a;
@@ -14,7 +14,7 @@ pub const LW_BUFFER_SIZE: usize = 4096;
 pub const HW_BUFFER_SIZE: usize = 32_768;
 pub const AES_128_GCM_TAG_LEN: usize = 16;
 pub fn new_error<T: ToString>(message: T) -> io::Error {
-    debug_log!("new error message:{}",message.to_string());
+    debug_log!("new error message:{}", message.to_string());
     return io::Error::new(
         std::io::ErrorKind::Other,
         format!("protocol: {}", message.to_string()),
@@ -53,6 +53,7 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     hasher.finalize().into()
 }
 
+#[inline]
 pub fn sha224(b: &[u8]) -> [u8; 28] {
     let mut hasher = Sha224::new();
     hasher.update(&b);
