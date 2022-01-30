@@ -77,7 +77,7 @@ pub fn random_iv_or_salt(iv_or_salt: &mut [u8]) {
 }
 
 #[cfg(test)]
-pub fn random_iv_or_salt(iv_or_salt: &mut [u8]) {}
+pub fn random_iv_or_salt(_iv_or_salt: &mut [u8]) {}
 
 pub fn openssl_bytes_to_key(password: &[u8], key: &mut [u8]) {
     use md5::Md5;

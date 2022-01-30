@@ -139,6 +139,17 @@ impl BinaryWsStreamBuilder {
             ws_config,
         })
     }
+    pub fn new_from_config(
+        uri: Uri,
+        ws_config: Option<WebSocketConfig>,
+        headers: Vec<(String, String)>,
+    ) -> BinaryWsStreamBuilder {
+        BinaryWsStreamBuilder {
+            uri,
+            headers,
+            ws_config,
+        }
+    }
 
     fn req(uri: Uri, headers: &Vec<(String, String)>) -> Request<()> {
         let mut request = Request::builder()

@@ -34,6 +34,24 @@ pub struct ShadowsocksBuilder {
 }
 
 impl ShadowsocksBuilder {
+    pub fn new_from_config(
+        addr: Address,
+        password: &str,
+        method: CipherKind,
+        context: SharedBloomContext,
+    ) -> ShadowsocksBuilder {
+        let mut key = BytesMut::with_capacity(method.key_len());
+        unsafe {
+            key.set_len(key.capacity());
+        }
+        openssl_bytes_to_key(password.as_bytes(), key.as_mut());
+        ShadowsocksBuilder {
+            addr,
+            method,
+            context,
+            key: key.freeze(),
+        }
+    }
     pub fn new(
         addr: Address,
         password: &str,
@@ -77,7 +95,7 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
         }
     }
 
-    async fn build_udp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
         todo!()
     }
 

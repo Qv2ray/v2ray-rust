@@ -5,7 +5,7 @@ use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::BloomContext;
 use crate::proxy::shadowsocks::crypto_io::CryptoStream;
 use crate::proxy::shadowsocks::ShadowsocksBuilder;
-use crate::proxy::tls::tls::TlsStreamBuilder;
+
 use crate::proxy::vmess::vmess::VmessStream;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::vmess::VmessBuilder;
@@ -13,11 +13,11 @@ use crate::proxy::websocket::BinaryWsStreamBuilder;
 use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder, ProxySteam};
 use bytes::BytesMut;
 use std::io;
-use std::net::{SocketAddr, ToSocketAddrs};
+use std::net::{SocketAddr};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_tungstenite::tungstenite::protocol::WebSocketConfig;
+
 
 #[allow(dead_code)]
 pub(crate) async fn test_relay_shadowsocks<T: AsyncWrite + AsyncRead + Unpin>(
@@ -140,9 +140,9 @@ pub(crate) async fn test_chain_vmess_ss<T: AsyncWrite + AsyncRead + Unpin>(
         .unwrap()
         .into_box()
     };
-    let mut outbound_stream = ChainStreamBuilder::new()
+    let outbound_stream = ChainStreamBuilder::new()
         .chain(vmess.into_box())
-        .build_tcp("127.0.0.1:10002", proxy_addr, f)
+        .build_tcp_dev("127.0.0.1:10002", proxy_addr, f)
         .await?;
     let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
     let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);

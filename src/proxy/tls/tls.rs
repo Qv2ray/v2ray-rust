@@ -2,17 +2,14 @@ use crate::common::new_error;
 use crate::debug_log;
 use crate::proxy::{BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
-use boring::ssl::ConnectConfiguration;
+
 use boring::ssl::SslConnector;
 use boring::ssl::SslMethod;
 use std::{
-    fs::File,
-    io::{self, BufReader},
-    path::Path,
-    sync::Arc,
+    io::{self},
 };
-use tokio::net::TcpStream;
-use tokio_boring::{connect, SslStream};
+
+use tokio_boring::{connect};
 use webpki::DnsNameRef;
 
 #[derive(Clone)]
@@ -25,6 +22,9 @@ impl TlsStreamBuilder {
         Ok(Self {
             sni: sni.to_string(),
         })
+    }
+    pub fn new_from_config(sni: String) -> Self {
+        Self { sni }
     }
 }
 
@@ -51,7 +51,7 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
         }
     }
 
-    async fn build_udp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
         unimplemented!()
     }
 

@@ -21,7 +21,7 @@ use crate::{
 };
 use generator::state_machine_generator;
 use rand::random;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
 
 pub const MAX_SIZE: usize = 17 * 1024;
 pub const CHUNK_SIZE: usize = 1 << 14;

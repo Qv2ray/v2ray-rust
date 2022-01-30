@@ -1,4 +1,5 @@
 use crate::common::new_error;
+use crate::config::ToChainableStreamBuilder;
 use async_trait::async_trait;
 use bytes::{Buf, BufMut, BytesMut};
 use std::fmt::{Debug, Formatter};
@@ -55,6 +56,12 @@ pub enum Address {
 #[derive(Debug)]
 pub struct AddressError {
     message: String,
+}
+
+impl AddressError {
+    pub fn as_str(&self) -> &str {
+        self.message.as_str()
+    }
 }
 
 impl From<AddressError> for io::Error {
@@ -345,7 +352,7 @@ impl From<&Address> for Address {
 }
 
 #[async_trait]
-pub trait ChainableStreamBuilder {
+pub trait ChainableStreamBuilder: Send {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
     async fn build_udp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
     fn into_box(self) -> Box<dyn ChainableStreamBuilder>;
@@ -366,11 +373,29 @@ pub type BoxProxyStream = Box<dyn ProxySteam>;
 #[derive(Clone)]
 pub struct ChainStreamBuilder {
     builders: Vec<Box<dyn ChainableStreamBuilder>>,
+    remote_addr: Option<Address>,
+    last_builder: Option<Box<dyn ToChainableStreamBuilder>>,
 }
 
 impl ChainStreamBuilder {
     pub fn new() -> ChainStreamBuilder {
-        ChainStreamBuilder { builders: vec![] }
+        ChainStreamBuilder {
+            builders: vec![],
+            remote_addr: None,
+            last_builder: None,
+        }
+    }
+
+    pub fn remote_addr_is_none(&self) -> bool {
+        self.remote_addr.is_none()
+    }
+
+    pub fn remote_addr(mut self, addr: Address) -> ChainStreamBuilder {
+        self.remote_addr = Some(addr);
+        self
+    }
+    pub fn push_remote_addr(&mut self, addr: Address) {
+        self.remote_addr = Some(addr);
     }
 
     pub fn chain(mut self, builder: Box<dyn ChainableStreamBuilder>) -> Self {
@@ -378,8 +403,33 @@ impl ChainStreamBuilder {
         self
     }
 
-    pub async fn build_tcp<F, T>(
-        mut self,
+    pub fn push_last_builder(&mut self, builder: Box<dyn ToChainableStreamBuilder>) {
+        self.last_builder = Some(builder);
+    }
+
+    pub fn push(&mut self, builder: Box<dyn ChainableStreamBuilder>) {
+        self.builders.push(builder);
+    }
+    pub async fn build_tcp(&self, proxy_addr: Address) -> io::Result<BoxProxyStream> {
+        if let Some(remote_addr) = &self.remote_addr {
+            let outer_stream = TcpStream::connect(remote_addr.to_string()).await?;
+            let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
+            for b in self.builders.iter() {
+                outer_stream = b.build_tcp(outer_stream).await?;
+            }
+            if let Some(b) = &self.last_builder {
+                outer_stream = b
+                    .to_chainable_stream_builder(Some(proxy_addr))
+                    .build_tcp(outer_stream)
+                    .await?;
+            }
+            return Ok(outer_stream);
+        }
+        Err(new_error("uninitialized stream builder!"))
+    }
+
+    pub async fn build_tcp_dev<F, T>(
+        self,
         remote_addr: T,
         proxy_addr: Address,
         func: F,
@@ -388,7 +438,7 @@ impl ChainStreamBuilder {
         F: FnOnce(Address) -> Box<dyn ChainableStreamBuilder>,
         T: tokio::net::ToSocketAddrs,
     {
-        let mut outer_stream = TcpStream::connect(remote_addr).await?;
+        let outer_stream = TcpStream::connect(remote_addr).await?;
         let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
         for b in self.builders.into_iter() {
             outer_stream = b.build_tcp(outer_stream).await?;

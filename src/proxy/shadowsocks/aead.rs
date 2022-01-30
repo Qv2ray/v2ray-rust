@@ -136,17 +136,11 @@ impl DecryptedReader {
     }
 }
 
-enum EncryptWriteStep {
-    Nothing,
-    Writing,
-}
-
 /// Writer wrapper that will encrypt data automatically
 pub struct EncryptedWriter {
     cipher: AeadCipher,
     tag_size: usize,
     state: u32, // for state machine generator use
-    steps: EncryptWriteStep,
     buf: BytesMut,
     pos: usize,
     data_len: usize,
@@ -164,7 +158,6 @@ impl EncryptedWriter {
             cipher: AeadCipher::new(method, key, iv_or_salt),
             tag_size: method.tag_len(),
             state: 0,
-            steps: EncryptWriteStep::Nothing,
             buf,
             pos: 0,
             data_len: 0,

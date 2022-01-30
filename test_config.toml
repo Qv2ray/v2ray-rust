@@ -1,0 +1,23 @@
+[[ss]]
+addr = "127.0.0.1:9000"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss"
+
+[[vmess]]
+addr = "127.0.0.1:10002"
+uuid = "b831381d-6324-4d53-ad4f-8cda48b30811"
+method = "aes-128-gcm"
+tag = "v"
+
+[[ws]]
+uri = "ws://127.0.0.1:10002/"
+tag = "w"
+
+[[outbounds]]
+chain = ["w", "v", "ss"]
+# debug
+tag = "out"
+
+[[inbounds]]
+addr = "127.0.0.1:12009"

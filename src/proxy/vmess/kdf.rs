@@ -152,11 +152,6 @@ pub fn vmess_kdf_1_one_shot(id: &[u8], key1: &[u8]) -> [u8; 32] {
 fn get_vmess_kdf_2(key1: &[u8], key2: &[u8]) -> VmessKdf2 {
     VmessKdf2::new(get_vmess_kdf_1(key1), key2)
 }
-pub fn vmess_kdf_2_one_shot(id: &[u8], key1: &[u8], key2: &[u8]) -> [u8; 32] {
-    let mut h = get_vmess_kdf_2(key1, key2);
-    h.update(id);
-    h.finalize()
-}
 
 #[inline]
 fn get_vmess_kdf_3(key1: &[u8], key2: &[u8], key3: &[u8]) -> VmessKdf3 {

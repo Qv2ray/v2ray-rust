@@ -19,7 +19,7 @@ use std::io::{Error, ErrorKind};
 use crate::common::random_iv_or_salt;
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::{impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown};
-use tokio::io::{AsyncRead, AsyncWrite, ReadBuf, ReadHalf, WriteHalf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 enum DecryptedReader {
     None,
@@ -113,16 +113,6 @@ impl<S> CryptoStream<S> {
             enc: EncryptedWriter::None,
             read_status: ReadStatus::Established,
         }
-    }
-
-    /// Return a reference to the underlying stream
-    pub fn get_ref(&self) -> &S {
-        &self.stream
-    }
-
-    /// Consume the CryptoStream and return the internal stream instance
-    pub fn into_inner(self) -> S {
-        self.stream
     }
 }
 

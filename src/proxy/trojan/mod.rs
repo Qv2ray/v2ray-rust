@@ -1,4 +1,4 @@
-use crate::common::{new_error, sha224};
+use crate::common::{sha224};
 use crate::proxy::trojan::trojan::RequestHeader;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
@@ -11,7 +11,7 @@ const HEX_CHARS_LOWER: &[u8; 16] = b"0123456789abcdef";
 pub struct TrojanStreamBuilder(RequestHeader);
 
 impl TrojanStreamBuilder {
-    fn new(addr: Address, password: &[u8], is_udp: bool) -> TrojanStreamBuilder {
+    pub fn new(addr: Address, password: &[u8], is_udp: bool) -> TrojanStreamBuilder {
         let x = sha224(password);
         let mut p = [0u8; 56];
         for (i, t) in x.iter().enumerate() {
@@ -36,7 +36,7 @@ impl ChainableStreamBuilder for TrojanStreamBuilder {
         }
     }
 
-    async fn build_udp(&self, io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
+    async fn build_udp(&self, _io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
         todo!()
     }
 

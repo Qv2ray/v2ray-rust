@@ -2,8 +2,8 @@ use crate::proxy::vmess::vmess::VmessStream;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
-use tokio::io::{AsyncRead, AsyncWrite};
-use tokio::net::TcpStream;
+
+
 
 mod aead;
 mod aead_header;
@@ -13,7 +13,7 @@ pub mod vmess_option;
 
 #[derive(Clone)]
 pub struct VmessBuilder {
-    vmess_option: VmessOption,
+    pub(crate) vmess_option: VmessOption,
 }
 
 impl VmessBuilder {
