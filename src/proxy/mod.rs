@@ -424,8 +424,20 @@ impl ChainStreamBuilder {
                     .await?;
             }
             return Ok(outer_stream);
+        } else {
+            let outer_stream = TcpStream::connect(proxy_addr.to_string()).await?;
+            let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
+            for b in self.builders.iter() {
+                outer_stream = b.build_tcp(outer_stream).await?;
+            }
+            if let Some(b) = &self.last_builder {
+                outer_stream = b
+                    .to_chainable_stream_builder(Some(proxy_addr))
+                    .build_tcp(outer_stream)
+                    .await?;
+            }
+            return Ok(outer_stream);
         }
-        Err(new_error("uninitialized stream builder!"))
     }
 
     pub async fn build_tcp_dev<F, T>(

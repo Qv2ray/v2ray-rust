@@ -17,7 +17,7 @@ pub fn new_error<T: ToString>(message: T) -> io::Error {
     debug_log!("new error message:{}", message.to_string());
     return io::Error::new(
         std::io::ErrorKind::Other,
-        format!("protocol: {}", message.to_string()),
+        format!("Error: {}", message.to_string()),
     );
 }
 

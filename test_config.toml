@@ -14,10 +14,18 @@ tag = "v"
 uri = "ws://127.0.0.1:10002/"
 tag = "w"
 
+[[direct]]
+tag = "d"
+
 [[outbounds]]
-chain = ["w", "v", "ss"]
+chain = ["d"]
 # debug
 tag = "out"
 
+[[outbounds]]
+chain = ["w","v","ss"]
+# debug
+tag = "out2"
+
 [[inbounds]]
-addr = "127.0.0.1:12009"
+addr = "127.0.0.1:1087"

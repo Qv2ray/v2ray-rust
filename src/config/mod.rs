@@ -1,5 +1,5 @@
 use crate::common::net::copy_with_capacity_and_counter;
-use crate::common::LW_BUFFER_SIZE;
+use crate::common::{new_error, LW_BUFFER_SIZE};
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
 use crate::proxy::shadowsocks::ShadowsocksBuilder;
@@ -18,6 +18,7 @@ use serde::Deserialize;
 use serde::Deserializer;
 use webpki::DnsNameRef;
 
+use crate::proxy::direct::DirectStreamBuilder;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
@@ -238,6 +239,27 @@ struct ShadowsocksConfig {
     tag: String,
 }
 
+#[derive(Deserialize, Clone)]
+struct DirectConfig {
+    tag: String,
+}
+impl ToChainableStreamBuilder for DirectConfig {
+    fn to_chainable_stream_builder(
+        &self,
+        _addr: Option<Address>,
+    ) -> Box<dyn ChainableStreamBuilder> {
+        Box::new(DirectStreamBuilder)
+    }
+
+    fn tag(&self) -> &str {
+        self.tag.as_str()
+    }
+
+    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
+        Box::new(self.clone())
+    }
+}
+
 impl ToChainableStreamBuilder for ShadowsocksConfig {
     fn to_chainable_stream_builder(
         &self,
@@ -296,6 +318,8 @@ pub struct Config {
     ws: Vec<WebsocketConfig>,
     #[serde(default)]
     trojan: Vec<TrojanConfig>,
+    #[serde(default)]
+    direct: Vec<DirectConfig>,
     outbounds: Vec<Outbounds>,
     inbounds: Vec<Inbounds>,
 }
@@ -316,7 +340,7 @@ impl Config {
         let config = toml::from_str(&config_string)?;
         Ok(config)
     }
-    fn build_inner_map(&self) -> HashMap<String, ChainStreamBuilder> {
+    fn build_inner_map(&self) -> io::Result<HashMap<String, ChainStreamBuilder>> {
         // tag->(protocol idx, idx of protocol vec)
         let mut config_map: HashMap<String, (u8, usize)> = HashMap::new();
         insert_config_map!(self.ss, 0u8, config_map);
@@ -324,12 +348,20 @@ impl Config {
         insert_config_map!(self.vmess, 2u8, config_map);
         insert_config_map!(self.ws, 3u8, config_map);
         insert_config_map!(self.trojan, 4u8, config_map);
+        insert_config_map!(self.direct, 5u8, config_map);
         let mut inner_map = HashMap::new();
         for out in self.outbounds.iter() {
             let mut addrs = Vec::new();
             let mut builder = ChainStreamBuilder::new();
             for tag in out.chain.iter() {
-                let protocol = config_map.get(tag).unwrap();
+                let protocol = config_map.get(tag);
+                if protocol.is_none() {
+                    return Err(new_error(format!(
+                        "config parse failed, can't find tag: {}",
+                        tag
+                    )));
+                }
+                let protocol = protocol.unwrap();
                 match protocol.0 {
                     0 => {
                         let tmp_addr = self.ss[protocol.1].addr.clone();
@@ -393,6 +425,9 @@ impl Config {
                         builder
                             .push(self.trojan[protocol.1].to_chainable_stream_builder(next_addr));
                     }
+                    5 => {
+                        builder.push(self.direct[protocol.1].to_chainable_stream_builder(None));
+                    }
                     _ => {
                         unreachable!()
                     }
@@ -400,11 +435,11 @@ impl Config {
             }
             inner_map.insert(out.tag.clone(), builder);
         }
-        inner_map
+        Ok(inner_map)
     }
 
     pub fn build_server(self) -> io::Result<()> {
-        let inner_map = self.build_inner_map();
+        let inner_map = self.build_inner_map()?;
         let inner_map = Arc::new(inner_map);
         {
             actix_rt::System::new().block_on(async move {
@@ -445,9 +480,9 @@ where
     let mut down = 0u64;
     let mut up = 0u64;
     tokio::select! {
-            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE)=>{
+            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE*2)=>{
             }
-            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE)=>{
+            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*2)=>{
             }
     }
     println!("downloaded bytes:{}, uploaded bytes:{}", down, up);
