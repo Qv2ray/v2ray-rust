@@ -13,11 +13,11 @@ use crate::proxy::{Address, AddressError, ChainStreamBuilder, ChainableStreamBui
 use actix_server::Server;
 use actix_service::fn_service;
 use lazy_static::lazy_static;
-use serde::de::{Error};
+use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
+use webpki::DnsNameRef;
 
-use spin::Mutex;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io;
@@ -31,7 +31,7 @@ lazy_static! {
     static ref SS_LOCAL_SHARED_CONTEXT: SharedBloomContext = Arc::new(BloomContext::new(true));
 }
 
-pub trait ToChainableStreamBuilder: Send {
+pub trait ToChainableStreamBuilder: Sync + Send {
     fn to_chainable_stream_builder(&self, addr: Option<Address>)
         -> Box<dyn ChainableStreamBuilder>;
     fn tag(&self) -> &str;
@@ -135,6 +135,16 @@ where
     uri.parse().map_err(D::Error::custom)
 }
 
+fn from_str_to_sni<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let sni: &str = Deserialize::deserialize(deserializer)?;
+    let dns_name = DnsNameRef::try_from_ascii_str(sni).map_err(D::Error::custom)?;
+    let res = std::str::from_utf8(dns_name.as_ref()).map_err(D::Error::custom)?;
+    Ok(res.to_owned())
+}
+
 #[derive(Deserialize, Clone)]
 pub struct TrojanConfig {
     password: String,
@@ -164,7 +174,10 @@ impl ToChainableStreamBuilder for TrojanConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct TlsConfig {
+    #[serde(deserialize_with = "from_str_to_sni")]
     sni: String,
+    cert_file: Option<String>,
+    key_file: Option<String>,
     tag: String,
 }
 
@@ -173,7 +186,11 @@ impl ToChainableStreamBuilder for TlsConfig {
         &self,
         _addr: Option<Address>,
     ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(TlsStreamBuilder::new_from_config(self.sni.clone()))
+        Box::new(TlsStreamBuilder::new_from_config(
+            self.sni.clone(),
+            &self.cert_file,
+            &self.key_file,
+        ))
     }
     fn tag(&self) -> &str {
         self.tag.as_str()
@@ -388,7 +405,7 @@ impl Config {
 
     pub fn build_server(self) -> io::Result<()> {
         let inner_map = self.build_inner_map();
-        let inner_map = Arc::new(Mutex::new(inner_map));
+        let inner_map = Arc::new(inner_map);
         {
             actix_rt::System::new().block_on(async move {
                 let mut server = Server::build();
@@ -403,9 +420,8 @@ impl Config {
                                 let x = stream.init(None).await?;
                                 let stream_builder;
                                 {
-                                    let map = inner_map.lock();
                                     // todo: route according tag
-                                    stream_builder = map.get("out").unwrap().clone();
+                                    stream_builder = inner_map.get("out").unwrap();
                                 }
                                 let out_stream = stream_builder.build_tcp(x.1).await?;
                                 return relay(x.0, out_stream).await;
@@ -419,9 +435,6 @@ impl Config {
     }
 }
 
-struct ConfigInner {
-    inner_map: HashMap<String, ChainStreamBuilder>,
-}
 async fn relay<T1, T2>(inbound_stream: T1, outbound_stream: T2) -> io::Result<()>
 where
     T1: AsyncRead + AsyncWrite + Unpin,

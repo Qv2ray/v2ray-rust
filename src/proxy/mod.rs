@@ -352,7 +352,7 @@ impl From<&Address> for Address {
 }
 
 #[async_trait]
-pub trait ChainableStreamBuilder: Send {
+pub trait ChainableStreamBuilder: Sync + Send {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
     async fn build_udp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
     fn into_box(self) -> Box<dyn ChainableStreamBuilder>;

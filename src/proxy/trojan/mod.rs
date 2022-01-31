@@ -1,4 +1,4 @@
-use crate::common::{sha224};
+use crate::common::sha224;
 use crate::proxy::trojan::trojan::RequestHeader;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
@@ -15,8 +15,8 @@ impl TrojanStreamBuilder {
         let x = sha224(password);
         let mut p = [0u8; 56];
         for (i, t) in x.iter().enumerate() {
-            p[i] = HEX_CHARS_LOWER[(t >> 4) as usize];
-            p[i + 1] = HEX_CHARS_LOWER[(t & 0x0f) as usize];
+            p[i * 2] = HEX_CHARS_LOWER[(t >> 4) as usize];
+            p[i * 2 + 1] = HEX_CHARS_LOWER[(t & 0x0f) as usize];
         }
         if is_udp {
             todo!()

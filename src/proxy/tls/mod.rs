@@ -1,9 +1,3 @@
-
-
-
-
-
-
 pub mod tls;
 
 // fn load_cert(path: &Path) -> io::Result<Vec<Certificate>> {

@@ -13,11 +13,10 @@ use crate::proxy::websocket::BinaryWsStreamBuilder;
 use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder, ProxySteam};
 use bytes::BytesMut;
 use std::io;
-use std::net::{SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-
 
 #[allow(dead_code)]
 pub(crate) async fn test_relay_shadowsocks<T: AsyncWrite + AsyncRead + Unpin>(

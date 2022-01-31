@@ -3,8 +3,6 @@ use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
 
-
-
 mod aead;
 mod aead_header;
 mod kdf;

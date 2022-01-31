@@ -3,44 +3,64 @@ use crate::debug_log;
 use crate::proxy::{BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
 
-use boring::ssl::SslConnector;
 use boring::ssl::SslMethod;
-use std::{
-    io::{self},
-};
+use boring::ssl::{SslConnector, SslFiletype};
+use std::io;
 
-use tokio_boring::{connect};
+use tokio_boring::connect;
 use webpki::DnsNameRef;
 
 #[derive(Clone)]
 pub struct TlsStreamBuilder {
+    connector: SslConnector,
     sni: String,
 }
 
 impl TlsStreamBuilder {
     pub fn new(sni: &str) -> io::Result<Self> {
+        let dns_name = DnsNameRef::try_from_ascii_str(sni)
+            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
+        let dns_name = std::str::from_utf8(dns_name.as_ref()).unwrap();
+        let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
+        configuration
+            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
+            .unwrap();
         Ok(Self {
-            sni: sni.to_string(),
+            connector: configuration.build(),
+            sni: dns_name.to_string(),
         })
     }
-    pub fn new_from_config(sni: String) -> Self {
-        Self { sni }
+    pub fn new_from_config(
+        sni: String,
+        cert_file: &Option<String>,
+        key_file: &Option<String>,
+    ) -> Self {
+        let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
+        if let Some(cert_file) = cert_file {
+            configuration
+                .set_certificate_file(cert_file, SslFiletype::PEM)
+                .unwrap();
+        }
+        if let Some(key_file) = key_file {
+            configuration
+                .set_private_key_file(key_file, SslFiletype::PEM)
+                .unwrap();
+        }
+        configuration
+            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
+            .unwrap();
+        Self {
+            connector: configuration.build(),
+            sni,
+        }
     }
 }
 
 #[async_trait]
 impl ChainableStreamBuilder for TlsStreamBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        let dns_name = DnsNameRef::try_from_ascii_str(&self.sni)
-            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
-        let dns_name = std::str::from_utf8(dns_name.as_ref()).unwrap();
-        println!("dnsname:{}", dns_name);
-        let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
-        configuration
-            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
-            .unwrap();
-        let configuration = configuration.build().configure().unwrap();
-        let stream = connect(configuration, dns_name, io).await;
+        let configuration = self.connector.configure().unwrap();
+        let stream = connect(configuration, self.sni.as_str(), io).await;
         match stream {
             Ok(stream) => Ok(Box::new(stream)),
             Err(e) => {
