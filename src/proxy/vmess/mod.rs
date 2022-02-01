@@ -1,6 +1,6 @@
 use crate::proxy::vmess::vmess::VmessStream;
 use crate::proxy::vmess::vmess_option::VmessOption;
-use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
+use crate::proxy::{BoxProxyStream, ChainableStreamBuilder};
 use async_trait::async_trait;
 
 mod aead;
@@ -12,20 +12,6 @@ pub mod vmess_option;
 #[derive(Clone)]
 pub struct VmessBuilder {
     pub(crate) vmess_option: VmessOption,
-}
-
-impl VmessBuilder {
-    pub fn new(
-        uuid: String,
-        security: String,
-        alter_id: u16,
-        addr: Address,
-        is_udp: bool,
-    ) -> anyhow::Result<VmessBuilder> {
-        Ok(VmessBuilder {
-            vmess_option: VmessOption::new(&uuid, alter_id, &security, addr, is_udp)?,
-        })
-    }
 }
 
 #[async_trait]

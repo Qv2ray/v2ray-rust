@@ -1,7 +1,5 @@
-use crate::common::aead_helper::AeadCipherHelper;
+use crate::common::aead_helper::{AeadCipherHelper, Aes128Gcm, Aes256Gcm, ChaCha20Poly1305};
 use crate::proxy::shadowsocks::ss_hkdf_sha1;
-use aes_gcm::{Aes128Gcm, Aes256Gcm};
-use chacha20poly1305::ChaCha20Poly1305;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum CipherKind {

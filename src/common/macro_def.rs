@@ -108,12 +108,14 @@ macro_rules! impl_flush_shutdown {
 #[macro_export]
 macro_rules! impl_read_utils {
     () => {
+        #[allow(dead_code)]
         #[inline]
         fn read_reserve(&mut self, required_data_size: usize) {
             if self.buffer.capacity() < required_data_size {
                 self.buffer.reserve(required_data_size);
             }
         }
+
         #[inline]
         fn read_at_least<R>(
             &mut self,
@@ -134,6 +136,8 @@ macro_rules! impl_read_utils {
             }
             Poll::Ready(Ok(()))
         }
+
+        #[allow(dead_code)]
         #[inline]
         fn calc_data_to_put(&mut self, dst: &mut ReadBuf<'_>) -> usize {
             self.minimal_data_to_put = cmp::min(self.data_length, dst.remaining());

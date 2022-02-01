@@ -4,7 +4,6 @@ use std::io;
 
 mod common;
 mod config;
-mod dev;
 mod proxy;
 
 fn main() -> io::Result<()> {
@@ -24,5 +23,5 @@ fn main() -> io::Result<()> {
     let filename = matches.value_of("config").unwrap().to_string();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
     let c = Config::read_from_file(filename)?;
-    c.build_server()
+    c.build_server()?.run()
 }

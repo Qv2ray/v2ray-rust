@@ -1,3 +1,5 @@
+default_outbound = "out"
+
 [[ss]]
 addr = "127.0.0.1:9000"
 password = "123456"
@@ -29,3 +31,13 @@ tag = "out2"
 
 [[inbounds]]
 addr = "127.0.0.1:1087"
+
+[[geosite_rules]]
+tag = "d"
+file_path = "/usr/share/v2ray/geosite.dat"
+rules = ["cn"]
+
+[[geoip_rules]]
+tag = "d"
+file_path = "/usr/share/v2ray/geoip.dat"
+rules = ["cn"]

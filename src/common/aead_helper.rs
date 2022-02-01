@@ -1,7 +1,8 @@
 use aes::cipher::generic_array::typenum::Unsigned;
-use aes_gcm::{aead::Tag, AeadInPlace, Aes128Gcm, Aes256Gcm, Key as GcmKey, Nonce as GcmNonce};
+use aes_gcm::{aead::Tag, AeadInPlace, Key as GcmKey, Nonce as GcmNonce};
+pub use aes_gcm::{Aes128Gcm, Aes256Gcm};
 use chacha20poly1305::aead::Key;
-use chacha20poly1305::ChaCha20Poly1305;
+pub use chacha20poly1305::ChaCha20Poly1305;
 
 pub trait AeadCipherHelper: AeadInPlace {
     fn new_with_slice(key: &[u8]) -> Self;

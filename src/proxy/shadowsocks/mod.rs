@@ -3,8 +3,7 @@ use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::SharedBloomContext;
 use crate::proxy::shadowsocks::crypto_io::CryptoStream;
 use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
-use anyhow::anyhow;
-use anyhow::Result;
+
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -51,31 +50,6 @@ impl ShadowsocksBuilder {
             context,
             key: key.freeze(),
         }
-    }
-    pub fn new(
-        addr: Address,
-        password: &str,
-        method: &str,
-        context: SharedBloomContext,
-    ) -> Result<ShadowsocksBuilder> {
-        let method = match method {
-            "none" => CipherKind::None,
-            "aes-128-gcm" => CipherKind::Aes128Gcm,
-            "aes-256-gcm" => CipherKind::Aes256Gcm,
-            "chacha20-ietf-poly1305" => CipherKind::ChaCha20Poly1305,
-            _ => return Err(anyhow!("wrong ss encryption method")),
-        };
-        let mut key = BytesMut::with_capacity(method.key_len());
-        unsafe {
-            key.set_len(key.capacity());
-        }
-        openssl_bytes_to_key(password.as_bytes(), key.as_mut());
-        Ok(ShadowsocksBuilder {
-            addr,
-            method,
-            context,
-            key: key.freeze(),
-        })
     }
 }
 

@@ -107,7 +107,6 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8], data: &[u8]) -> BytesMut {
 
 pub struct VmessHeaderReader {
     buffer: BytesMut,
-    n: usize,
     state: u32, // for state machine generator use
     resp_header_len_enc: Aes128Gcm,
     header_len_iv: [u8; 12],
@@ -135,7 +134,6 @@ impl VmessHeaderReader {
         let buffer = BytesMut::with_capacity(LW_BUFFER_SIZE * 2);
         VmessHeaderReader {
             buffer,
-            n: 0,
             state: 0,
             resp_header_len_enc,
             header_len_iv: <[u8; 12]>::try_from(&header_iv[..12]).unwrap(),

@@ -390,17 +390,8 @@ impl ChainStreamBuilder {
         self.remote_addr.is_none()
     }
 
-    pub fn remote_addr(mut self, addr: Address) -> ChainStreamBuilder {
-        self.remote_addr = Some(addr);
-        self
-    }
     pub fn push_remote_addr(&mut self, addr: Address) {
         self.remote_addr = Some(addr);
-    }
-
-    pub fn chain(mut self, builder: Box<dyn ChainableStreamBuilder>) -> Self {
-        self.builders.push(builder);
-        self
     }
 
     pub fn push_last_builder(&mut self, builder: Box<dyn ToChainableStreamBuilder>) {
@@ -438,25 +429,5 @@ impl ChainStreamBuilder {
             }
             return Ok(outer_stream);
         }
-    }
-
-    pub async fn build_tcp_dev<F, T>(
-        self,
-        remote_addr: T,
-        proxy_addr: Address,
-        func: F,
-    ) -> io::Result<BoxProxyStream>
-    where
-        F: FnOnce(Address) -> Box<dyn ChainableStreamBuilder>,
-        T: tokio::net::ToSocketAddrs,
-    {
-        let outer_stream = TcpStream::connect(remote_addr).await?;
-        let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
-        for b in self.builders.into_iter() {
-            outer_stream = b.build_tcp(outer_stream).await?;
-        }
-        outer_stream = func(proxy_addr).build_tcp(outer_stream).await?;
-
-        Ok(outer_stream)
     }
 }

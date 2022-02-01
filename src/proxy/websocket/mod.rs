@@ -127,18 +127,6 @@ pub struct BinaryWsStreamBuilder {
 }
 
 impl BinaryWsStreamBuilder {
-    pub fn new(
-        uri: &str,
-        ws_config: Option<WebSocketConfig>,
-        headers: Vec<(String, String)>,
-    ) -> anyhow::Result<BinaryWsStreamBuilder> {
-        let uri: Uri = uri.parse()?;
-        Ok(BinaryWsStreamBuilder {
-            uri,
-            headers,
-            ws_config,
-        })
-    }
     pub fn new_from_config(
         uri: Uri,
         ws_config: Option<WebSocketConfig>,

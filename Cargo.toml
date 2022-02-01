@@ -46,7 +46,12 @@ hmac = "0.12.0"
 tokio-boring = "2.1.4"
 webpki = "0.22.0"
 boring = "2.0.0"
-domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
-cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
+regex = "1.5.4"
+protobuf = { version = "2.18.0", features = ["with-bytes"] }
+domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/", features=["pb"]}
+cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher", features=["pb"]}
 generator={git="https://github.com/darsvador/generator/"}
+
+[profile.release]
+lto = true
 
