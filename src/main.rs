@@ -6,6 +6,9 @@ mod common;
 mod config;
 mod proxy;
 
+//#[global_allocator]
+//static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
+
 fn main() -> io::Result<()> {
     let matches = App::new("v2ray-rust")
         .version("v0.0.1")

@@ -1,17 +1,21 @@
 use crate::common::new_error;
-use crate::proxy::Address;
-use cidr_matcher::geoip;
+use crate::proxy::{show_utf8_lossy, Address};
 use cidr_matcher::lpc_trie::LPCTrie;
 use domain_matcher::ac_automaton::HybridMatcher;
 use domain_matcher::mph::MphMatcher;
 use domain_matcher::DomainMatcher;
-use domain_matcher::{geosite, MatchType};
+use domain_matcher::MatchType;
+
+use crate::config::{geoip, geosite};
+use crate::debug_log;
+use bytes::Buf;
+use protobuf::CodedInputStream;
 use regex;
 use regex::{RegexSet, RegexSetBuilder};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use std::fs::File;
 use std::io;
+use std::io::BufReader;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 pub(super) struct RouterBuilder {
@@ -84,40 +88,62 @@ impl RouterBuilder {
                 }
             }
         }
-        let mut f = match File::open(&file_name) {
-            Ok(f) => f,
-            Err(e) => {
-                return Err(new_error(e.to_string()));
-            }
-        };
-        let site_group_list: geosite::SiteGroupList =
-            match protobuf::Message::parse_from_reader(&mut f) {
-                Ok(v) => v,
-                Err(e) => return Err(new_error(e.to_string())),
-            };
-        for i in site_group_list.site_group.into_iter() {
-            if let Some(outbound_tag) = geosite_tags.get(i.tag.as_str()) {
-                let matcher = self.domain_matchers.get_mut(*outbound_tag).unwrap();
-                for domain in i.domain.into_iter() {
-                    match domain.field_type {
-                        geosite::Domain_Type::Plain => {
-                            matcher.reverse_insert(domain.get_value(), MatchType::SubStr(true))
+        let mut f = File::open(&file_name)?;
+        let mut is = CodedInputStream::new(&mut f);
+        let mut domain: geosite::Domain;
+        let mut site_group_tag = String::new();
+        let mut skip_field = None;
+        while !is.eof()? {
+            is.read_tag_unpack()?;
+            is.read_raw_varint64()?;
+            while !is.eof().unwrap() {
+                let (field_number, wire_type) = is.read_tag_unpack()?;
+                match field_number {
+                    1 => {
+                        is.read_string_into(&mut site_group_tag)?;
+                        skip_field = geosite_tags.get(site_group_tag.as_str());
+                    }
+                    2 => {
+                        if skip_field.is_none() {
+                            is.skip_field(wire_type)?;
+                            continue;
                         }
-                        geosite::Domain_Type::Domain => {
-                            matcher.reverse_insert(domain.get_value(), MatchType::Domain(true))
-                        }
-                        geosite::Domain_Type::Full => {
-                            matcher.reverse_insert(domain.get_value(), MatchType::Full(true))
-                        }
-                        _ => {
-                            if let Some(regex_exprs) = self.regex_matchers.get_mut(*outbound_tag) {
-                                regex_exprs.push(domain.get_value().to_string())
-                            } else {
-                                let regex_exprs = vec![domain.value];
-                                self.regex_matchers
-                                    .insert(outbound_tag.to_string(), regex_exprs);
+                        domain = is.read_message()?;
+                        {
+                            if let Some(outbound_tag) = skip_field {
+                                let matcher = self.domain_matchers.get_mut(*outbound_tag).unwrap();
+                                {
+                                    match domain.field_type {
+                                        geosite::Domain_Type::Plain => matcher.reverse_insert(
+                                            domain.get_value(),
+                                            MatchType::SubStr(true),
+                                        ),
+                                        geosite::Domain_Type::Domain => matcher.reverse_insert(
+                                            domain.get_value(),
+                                            MatchType::Domain(true),
+                                        ),
+                                        geosite::Domain_Type::Full => matcher.reverse_insert(
+                                            domain.get_value(),
+                                            MatchType::Full(true),
+                                        ),
+                                        _ => {
+                                            if let Some(regex_exprs) =
+                                                self.regex_matchers.get_mut(*outbound_tag)
+                                            {
+                                                regex_exprs.push(domain.get_value().to_string())
+                                            } else {
+                                                let regex_exprs = vec![domain.value];
+                                                self.regex_matchers
+                                                    .insert(outbound_tag.to_string(), regex_exprs);
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+                    _ => {
+                        // is.skip_field(wire_type);
                     }
                 }
             }
@@ -141,43 +167,56 @@ impl RouterBuilder {
                 )));
             }
         };
-        let geoip_list: geoip::GeoIPList = match protobuf::Message::parse_from_reader(&mut f) {
-            Ok(v) => v,
-            Err(e) => {
-                return Err(new_error(format!(
-                    "geoip file {} has invalid format: {}",
-                    file_name, e
-                )));
-            }
-        };
-        for i in geoip_list.entry.into_iter() {
-            let country_code = i.country_code.to_lowercase();
-            if geoip_tags.contains(country_code.as_str()) {
-                for pair in i.cidr.into_iter() {
-                    let len = pair.ip.len();
-                    match len {
-                        16 => {
-                            let inner = pair.ip.try_into().unwrap();
-                            self.lpc_matcher_v6.put(
-                                u128::from_be_bytes(inner) >> (128 - pair.prefix)
-                                    << (128 - pair.prefix),
-                                pair.prefix as u8,
-                                outbound_tag.to_string(),
-                            );
+        let mut is = CodedInputStream::new(&mut f);
+        let mut cidr = geoip::CIDR::new();
+        let mut country_code = String::new();
+        let mut skip_field: bool = false;
+        while !is.eof()? {
+            is.read_tag_unpack()?;
+            // assert_eq!(field_number, 1);
+            is.read_raw_varint64()?;
+            while !is.eof()? {
+                let (field_number, wire_type) = is.read_tag_unpack()?;
+                match field_number {
+                    1 => {
+                        if !country_code.is_empty() {
+                            is.read_raw_varint64()?;
+                            country_code.clear();
+                            continue;
                         }
-                        4 => {
-                            let inner = pair.ip.try_into().unwrap();
-                            self.lpc_matcher_v4.put(
-                                u32::from_be_bytes(inner) >> (32 - pair.prefix)
-                                    << (32 - pair.prefix),
-                                pair.prefix as u8,
-                                outbound_tag.to_string(),
-                            );
+                        country_code = is.read_string()?.to_lowercase();
+                        skip_field = !geoip_tags.contains(country_code.as_str());
+                    }
+                    2 => {
+                        if skip_field {
+                            is.skip_field(wire_type)?;
+                            continue;
                         }
-                        _ => {
-                            eprintln!("invalid ip length detected");
+                        is.merge_message(&mut cidr)?;
+                        let len = cidr.ip.len();
+                        match len {
+                            16 => {
+                                let ip6 = cidr.ip.get_u128();
+                                self.lpc_matcher_v6.put(
+                                    ip6 >> (128 - cidr.prefix) << (128 - cidr.prefix),
+                                    cidr.prefix as u8,
+                                    outbound_tag.to_string(),
+                                );
+                            }
+                            4 => {
+                                let ip4 = cidr.ip.get_u32();
+                                self.lpc_matcher_v4.put(
+                                    ip4 >> (32 - cidr.prefix) << (32 - cidr.prefix),
+                                    cidr.prefix as u8,
+                                    outbound_tag.to_string(),
+                                );
+                            }
+                            _ => {
+                                debug_log!("invalid ip length detected");
+                            }
                         }
                     }
+                    _ => {}
                 }
             }
         }
@@ -199,8 +238,26 @@ impl RouterBuilder {
             regex_matchers.insert(outbound_tag, rule_set);
         }
         self.domain_matchers.iter_mut().for_each(|x| x.1.build());
+        let mut domain_matchers: Vec<(String, Box<dyn DomainMatcher>)> =
+            std::mem::take(&mut self.domain_matchers)
+                .into_iter()
+                .collect();
+        domain_matchers.shrink_to_fit();
+        let mut regex_matchers: Vec<(String, RegexSet)> =
+            std::mem::take(&mut regex_matchers).into_iter().collect();
+        regex_matchers.shrink_to_fit();
+        //use deepsize::DeepSizeOf;
+        //let s1 =self.lpc_matcher_v4.deep_size_of() as f64 / (1024.0 * 1024.0);
+        //let s2 =self.lpc_matcher_v6.deep_size_of() as f64 / (1024.0 * 1024.0);
+        //info!(
+        //    "lpc_trie_cn_v4 size:{}M, lpc_trie_cn_v6:{}M, total: {}M",
+        //    s1,
+        //    s2,
+        //    s1 + s2
+        //);
+
         Ok(Router {
-            domain_matchers: self.domain_matchers,
+            domain_matchers,
             lpc_matcher_v4: self.lpc_matcher_v4,
             lpc_matcher_v6: self.lpc_matcher_v6,
             regex_matchers,
@@ -208,11 +265,12 @@ impl RouterBuilder {
         })
     }
 }
+
 pub struct Router {
-    domain_matchers: HashMap<String, Box<dyn DomainMatcher>>,
+    domain_matchers: Vec<(String, Box<dyn DomainMatcher>)>,
     lpc_matcher_v4: LPCTrie<u32>,
     lpc_matcher_v6: LPCTrie<u128>,
-    regex_matchers: HashMap<String, RegexSet>,
+    regex_matchers: Vec<(String, RegexSet)>,
     default_outbound_tag: String,
 }
 

@@ -8,9 +8,10 @@ edition = "2018"
 
 [dependencies]
 async-trait = "0.1"
-actix = "0.10.0"
+# actix = "0.10.0"
+# snmalloc-rs = "0.2.28"
 tokio-tungstenite = {version="*",features=["stream"],default-features = false}
-actix-http = { version = "3.0.0-beta.5", features = ["rustls"]}
+# actix-http = { version = "3.0.0-beta.5", features = ["rustls"]}
 actix-rt = "2.2.0"
 env_logger = "0.9"
 clap = "3.0.13"
@@ -19,9 +20,9 @@ serde = { version = "1.0", features = ["derive"] }
 actix-server = "2.0.0-rc.4"
 log = "0.4"
 lazy_static = "1.4.0"
-awc = "3.0.0-beta.4"
+# awc = "3.0.0-beta.4"
 actix-service = "2.0"
-snmalloc-rs = "0.2.6"
+# snmalloc-rs = "0.2.6"
 anyhow = "1.0"
 bytes = "1"
 rand = { version = "0.7", features = ["small_rng"] }
@@ -47,11 +48,13 @@ tokio-boring = "2.1.4"
 webpki = "0.22.0"
 boring = "2.0.0"
 regex = "1.5.4"
-protobuf = { version = "2.18.0", features = ["with-bytes"] }
-domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/", features=["pb"]}
-cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher", features=["pb"]}
+protobuf = { version = "2.26.1", features = ["with-bytes"] }
+domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
+cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
 generator={git="https://github.com/darsvador/generator/"}
 
 [profile.release]
 lto = true
 
+[build-dependencies]
+protoc-rust = "2.26.1"

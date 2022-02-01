@@ -28,7 +28,8 @@ fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
         .collect()
 }
 
-fn show_utf8_lossy(bs: &[u8]) -> String {
+#[allow(dead_code)]
+pub fn show_utf8_lossy(bs: &[u8]) -> String {
     String::from_utf8_lossy(bs).into_owned()
 }
 

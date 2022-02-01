@@ -29,6 +29,10 @@ chain = ["w","v","ss"]
 # debug
 tag = "out2"
 
+[[outbounds]]
+chain = ["d"]
+tag = "private"
+
 [[inbounds]]
 addr = "127.0.0.1:1087"
 
@@ -41,3 +45,8 @@ rules = ["cn"]
 tag = "d"
 file_path = "/usr/share/v2ray/geoip.dat"
 rules = ["cn"]
+
+[[geoip_rules]]
+tag="private"
+file_path = "/usr/share/v2ray/geoip.dat"
+rules = ["private"]
