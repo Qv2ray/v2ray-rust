@@ -1,5 +1,5 @@
 use crate::common::new_error;
-use crate::proxy::{show_utf8_lossy, Address};
+use crate::proxy::{Address};
 use cidr_matcher::lpc_trie::LPCTrie;
 use domain_matcher::ac_automaton::HybridMatcher;
 use domain_matcher::mph::MphMatcher;
@@ -15,7 +15,7 @@ use regex::{RegexSet, RegexSetBuilder};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
-use std::io::BufReader;
+
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 pub(super) struct RouterBuilder {

@@ -12,7 +12,7 @@ use bytes::{Buf, BufMut, BytesMut};
 
 use crate::common::{net::PollUtil, LW_BUFFER_SIZE};
 use futures_util::ready;
-use generator::state_machine_generator;
+use gentian::gentian;
 
 use crate::impl_read_utils;
 use crate::proxy::shadowsocks::aead_helper::{AeadCipher, CipherKind};
@@ -48,8 +48,8 @@ impl DecryptedReader {
     }
 
     impl_read_utils!();
-    #[state_machine_generator]
-    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_read_decrypted<R>(
         &mut self,
         ctx: &mut Context<'_>,
@@ -165,8 +165,8 @@ impl EncryptedWriter {
         }
     }
 
-    #[state_machine_generator]
-    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_write_encrypted<W>(
         &mut self,
         ctx: &mut Context<'_>,

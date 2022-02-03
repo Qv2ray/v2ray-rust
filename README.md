@@ -72,7 +72,7 @@ rules = ["private"]
 - ✅ [CIDRMatcher](https://github.com/Qv2ray/CIDRMatcher)
 
 ### Rust generator
-- ✅ [generator: a proc macro that transforms generators to state machines](https://github.com/darsvador/generator)
+- ✅ [gentian: a proc macro that transforms generators to state machines](https://crates.io/crates/gentian)
 
 ### socks5
 - ✅ socks5 Inbound

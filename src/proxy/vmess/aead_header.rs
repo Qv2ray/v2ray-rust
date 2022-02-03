@@ -18,7 +18,7 @@ use crate::proxy::vmess::kdf::{
 use aes::Aes128;
 use aes_gcm::Aes128Gcm;
 use futures_util::ready;
-use generator::state_machine_generator;
+use gentian::gentian;
 use std::io::ErrorKind;
 use std::task::{Context, Poll};
 use std::{cmp, io};
@@ -153,8 +153,8 @@ impl VmessHeaderReader {
     }
 
     impl_read_utils!();
-    #[state_machine_generator]
-    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_read_decrypted<R>(
         &mut self,
         ctx: &mut Context<'_>,

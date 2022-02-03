@@ -19,7 +19,7 @@ use crate::{
     debug_log, impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
     md5,
 };
-use generator::state_machine_generator;
+use gentian::gentian;
 use rand::random;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, ReadBuf};
 
@@ -178,8 +178,8 @@ impl<S> VmessStream<S>
 where
     S: AsyncReadExt + Unpin,
 {
-    #[state_machine_generator]
-    #[fsa_attr(state=this.state_1,ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(state=this.state_1,ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     fn poll_read_header(
         this: &mut VmessStream<S>,
         ctx: &mut Context<'_>,
@@ -220,8 +220,8 @@ impl<S> VmessStream<S>
 where
     S: AsyncWrite + Unpin,
 {
-    #[state_machine_generator]
-    #[fsa_attr(state=this.state_2,ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(state=this.state_2,ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     fn poll_write_header(
         this: &mut VmessStream<S>,
         ctx: &mut Context<'_>,

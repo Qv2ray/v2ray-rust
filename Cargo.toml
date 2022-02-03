@@ -51,7 +51,7 @@ regex = "1.5.4"
 protobuf = { version = "2.26.1", features = ["with-bytes"] }
 domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
 cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
-generator={git="https://github.com/darsvador/generator/"}
+gentian = "0.1.1"
 
 [profile.release]
 lto = true

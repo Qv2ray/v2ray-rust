@@ -8,7 +8,7 @@ use aes_gcm::Aes128Gcm;
 use bytes::{Buf, BufMut, BytesMut};
 use chacha20poly1305::ChaCha20Poly1305;
 use futures_util::ready;
-use generator::state_machine_generator;
+use gentian::gentian;
 use std::io::ErrorKind;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -66,8 +66,8 @@ impl VmessAeadWriter {
         }
     }
 
-    #[state_machine_generator]
-    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_write_encrypted<W>(
         &mut self,
         ctx: &mut Context<'_>,
@@ -220,8 +220,8 @@ impl VmessAeadReader {
         res
     }
 
-    #[state_machine_generator]
-    #[fsa_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
     pub fn poll_read_decrypted<R>(
         &mut self,
         ctx: &mut Context<'_>,
