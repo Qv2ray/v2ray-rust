@@ -6,7 +6,7 @@ An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 ## Config example
 
 ````toml
-default_outbound = "out"
+default_outbound = "out2"
 
 [[ss]]
 addr = "127.0.0.1:9000"
@@ -44,13 +44,17 @@ tag = "private"
 [[inbounds]]
 addr = "127.0.0.1:1087"
 
+[[dokodemo]]
+addr = "127.0.0.1:12345"
+tproxy = true
+
 [[geosite_rules]]
-tag = "d"
+tag = "out"
 file_path = "/usr/share/v2ray/geosite.dat"
 rules = ["cn"]
 
 [[geoip_rules]]
-tag = "d"
+tag = "out"
 file_path = "/usr/share/v2ray/geoip.dat"
 rules = ["cn"]
 
@@ -58,7 +62,6 @@ rules = ["cn"]
 tag="private"
 file_path = "/usr/share/v2ray/geoip.dat"
 rules = ["private"]
-
 ````
 
 ## Roadmap

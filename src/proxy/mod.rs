@@ -13,6 +13,7 @@ use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::net::TcpStream;
 
 pub mod direct;
+pub mod dokodemo_door;
 pub mod shadowsocks;
 pub mod socks;
 pub mod tls;
@@ -298,6 +299,15 @@ impl Address {
                 buf.put_u8(0x02);
                 buf.put_u8(domain_name.len() as u8);
                 buf.put_slice(&domain_name.as_bytes()[..]);
+            }
+        }
+    }
+
+    pub fn get_sock_addr(&self) -> SocketAddr {
+        match self {
+            Address::SocketAddress(e) => *e,
+            Address::DomainNameAddress(_, _) => {
+                panic!("domain can't get sock addr");
             }
         }
     }

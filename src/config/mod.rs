@@ -1,9 +1,15 @@
+mod deserialize;
 mod geoip;
 mod geosite;
+mod ip_trie;
 mod route;
 
 use crate::common::net::copy_with_capacity_and_counter;
 use crate::common::{new_error, LW_BUFFER_SIZE};
+use crate::config::deserialize::{
+    from_str_to_address, from_str_to_option_address, from_str_to_security_num, from_str_to_sni,
+    from_str_to_uri, from_str_to_uuid,
+};
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
 use crate::proxy::shadowsocks::ShadowsocksBuilder;
@@ -13,23 +19,25 @@ use crate::proxy::trojan::TrojanStreamBuilder;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::vmess::VmessBuilder;
 use crate::proxy::websocket::BinaryWsStreamBuilder;
-use crate::proxy::{Address, AddressError, ChainStreamBuilder, ChainableStreamBuilder};
+use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder};
 use actix_server::Server;
 use actix_service::fn_service;
 use lazy_static::lazy_static;
 use serde::de::Error;
 use serde::Deserialize;
 use serde::Deserializer;
-use webpki::DnsNameRef;
+use std::net::{SocketAddr, TcpListener as StdTcpListener};
 
 use crate::config::route::{Router, RouterBuilder};
+use crate::debug_log;
 use crate::proxy::direct::DirectStreamBuilder;
 use domain_matcher::MatchType;
-use log::debug;
+use log::{debug, info};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::Read;
+use std::os::raw::c_int;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
@@ -88,69 +96,6 @@ impl ToChainableStreamBuilder for VmessConfig {
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
     }
-}
-
-fn from_str_to_address<'de, D>(deserializer: D) -> Result<Address, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let addr: &str = Deserialize::deserialize(deserializer)?;
-    addr.parse()
-        .map_err(|e: AddressError| D::Error::custom(e.as_str()))
-}
-
-fn from_str_to_security_num<'de, D>(deserializer: D) -> Result<u8, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let security_num: u8;
-    let security: &str = Deserialize::deserialize(deserializer)?;
-    if security == "aes-128-gcm" {
-        security_num = 0x03;
-    } else if security == "chacha20-poly1305" {
-        security_num = 0x04;
-    } else if security == "none" {
-        security_num = 0x05;
-    } else if security == "auto" {
-        #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
-        {
-            security_num = 0x03;
-        }
-        #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
-        {
-            security_num = 0x04;
-        }
-    } else {
-        let msg = format!("unknown security type {}", security);
-        return Err(D::Error::custom(msg.as_str()));
-    };
-    Ok(security_num)
-}
-
-fn from_str_to_uuid<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let uuid_str: &str = Deserialize::deserialize(deserializer)?;
-    Uuid::parse_str(uuid_str).map_err(D::Error::custom)
-}
-
-fn from_str_to_uri<'de, D>(deserializer: D) -> Result<Uri, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let uri: &str = Deserialize::deserialize(deserializer)?;
-    uri.parse().map_err(D::Error::custom)
-}
-
-fn from_str_to_sni<'de, D>(deserializer: D) -> Result<String, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let sni: &str = Deserialize::deserialize(deserializer)?;
-    let dns_name = DnsNameRef::try_from_ascii_str(sni).map_err(D::Error::custom)?;
-    let res = std::str::from_utf8(dns_name.as_ref()).map_err(D::Error::custom)?;
-    Ok(res.to_owned())
 }
 
 #[derive(Deserialize, Clone)]
@@ -344,8 +289,24 @@ pub struct DomainRoutingRules {
     use_mph: bool,
 }
 
+fn default_backlog() -> u32 {
+    4096
+}
+
+#[derive(Deserialize)]
+pub struct DokodemoDoor {
+    #[serde(default)]
+    tproxy: bool,
+    #[serde(deserialize_with = "from_str_to_address")]
+    addr: Address,
+    #[serde(default, deserialize_with = "from_str_to_option_address")]
+    target_addr: Option<Address>,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
+    #[serde(default = "default_backlog")]
+    backlog: u32,
     #[serde(default)]
     ss: Vec<ShadowsocksConfig>,
     #[serde(default)]
@@ -358,6 +319,8 @@ pub struct Config {
     trojan: Vec<TrojanConfig>,
     #[serde(default)]
     direct: Vec<DirectConfig>,
+    #[serde(default)]
+    dokodemo: Vec<DokodemoDoor>,
     #[serde(default)]
     domain_routing_rules: Vec<DomainRoutingRules>,
     #[serde(default)]
@@ -500,7 +463,9 @@ impl Config {
             default_outbound_tag.to_string(),
         )?;
         Ok(ConfigServerBuilder {
+            backlog: self.backlog,
             inbounds: std::mem::take(&mut self.inbounds),
+            dokodemo: std::mem::take(&mut self.dokodemo),
             router: Arc::new(router),
             inner_map: Arc::new(inner_map),
         })
@@ -508,18 +473,80 @@ impl Config {
 }
 
 pub struct ConfigServerBuilder {
+    backlog: u32,
     inbounds: Vec<Inbounds>,
+    dokodemo: Vec<DokodemoDoor>,
     router: Arc<Router>,
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
 }
 
 impl ConfigServerBuilder {
-    pub fn run(self) -> io::Result<()> {
+    pub fn run(mut self) -> io::Result<()> {
         let router = (&self.router).clone();
         let inner_map = (&self.inner_map).clone();
         {
             actix_rt::System::new().block_on(async move {
                 let mut server = Server::build();
+                server = server.backlog(self.backlog);
+                debug_log!("backlog is:{}", self.backlog);
+                for door in self.dokodemo.iter_mut() {
+                    let inner_map = inner_map.clone();
+                    let router = router.clone();
+                    let domain = match door.addr {
+                        Address::SocketAddress(SocketAddr::V4(_)) => socket2::Domain::IPV4,
+                        Address::SocketAddress(SocketAddr::V6(_)) => socket2::Domain::IPV6,
+                        Address::DomainNameAddress(_, _) => {
+                            return Err(new_error("unsupported dokodemo door listen addr type."));
+                        }
+                    };
+                    let socket = socket2::Socket::new(
+                        domain,
+                        socket2::Type::STREAM,
+                        Some(socket2::Protocol::TCP),
+                    )?;
+                    socket.set_nonblocking(true)?;
+                    #[cfg(target_os = "linux")]
+                    {
+                        info!("set tproxy to {}", door.tproxy);
+                        socket.set_reuse_address(true)?;
+                        socket.set_ip_transparent(door.tproxy)?;
+                    }
+                    let addr = door.addr.get_sock_addr().into();
+                    socket.bind(&addr)?;
+                    socket.listen(self.backlog as c_int)?;
+                    let target_addr = std::mem::take(&mut door.target_addr);
+                    let std_listener = StdTcpListener::from(socket);
+                    server = server.listen("dokodemo", std_listener, move || {
+                        let target_addr = target_addr.clone();
+                        let inner_map = inner_map.clone();
+                        let router = router.clone();
+                        fn_service(move |io: TcpStream| {
+                            let target_addr = target_addr.clone();
+                            let inner_map = inner_map.clone();
+                            let router = router.clone();
+                            async move {
+                                let dokodemo_door_addr = io.local_addr()?;
+                                if let Some(addr) = target_addr {
+                                    let out_stream = TcpStream::connect(addr.to_string()).await?;
+                                    return relay(io, out_stream).await;
+                                }
+                                let stream_builder;
+                                {
+                                    let ob = router.match_socket_addr(&dokodemo_door_addr);
+                                    debug!(
+                                        "routing dokodemo addr {} to outbound:{}",
+                                        dokodemo_door_addr.to_string(),
+                                        ob
+                                    );
+                                    stream_builder = inner_map.get(ob).unwrap();
+                                }
+                                let out_stream =
+                                    stream_builder.build_tcp(dokodemo_door_addr.into()).await?;
+                                return relay(io, out_stream).await;
+                            }
+                        })
+                    })?;
+                }
                 for inbound in self.inbounds.into_iter() {
                     let inner_map = inner_map.clone();
                     let router = router.clone();

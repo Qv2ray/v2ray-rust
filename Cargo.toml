@@ -48,6 +48,7 @@ tokio-boring = "2.1.4"
 webpki = "0.22.0"
 boring = "2.0.0"
 regex = "1.5.4"
+socket2 = { version="0.4.4",features=["all"]}
 protobuf = { version = "2.26.1", features = ["with-bytes"] }
 domain_matcher={git="https://github.com/Qv2ray/DomainMatcher/"}
 cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}

@@ -1,6 +1,5 @@
 use crate::common::new_error;
-use crate::proxy::{Address};
-use cidr_matcher::lpc_trie::LPCTrie;
+use crate::proxy::Address;
 use domain_matcher::ac_automaton::HybridMatcher;
 use domain_matcher::mph::MphMatcher;
 use domain_matcher::DomainMatcher;
@@ -18,10 +17,11 @@ use std::io;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
+use super::ip_trie::GeoIPMatcher;
+
 pub(super) struct RouterBuilder {
     domain_matchers: HashMap<String, Box<dyn DomainMatcher>>,
-    lpc_matcher_v4: LPCTrie<u32>,
-    lpc_matcher_v6: LPCTrie<u128>,
+    ip_matcher: GeoIPMatcher,
     regex_matchers: HashMap<String, Vec<String>>,
 }
 
@@ -29,8 +29,7 @@ impl RouterBuilder {
     pub fn new() -> RouterBuilder {
         RouterBuilder {
             domain_matchers: HashMap::new(),
-            lpc_matcher_v4: LPCTrie::new(),
-            lpc_matcher_v6: LPCTrie::new(),
+            ip_matcher: GeoIPMatcher::new(),
             regex_matchers: HashMap::new(),
         }
     }
@@ -197,16 +196,25 @@ impl RouterBuilder {
                         match len {
                             16 => {
                                 let ip6 = cidr.ip.get_u128();
-                                self.lpc_matcher_v6.put(
-                                    ip6 >> (128 - cidr.prefix) << (128 - cidr.prefix),
+                                self.ip_matcher.put_v6(
+                                    ip6,
                                     cidr.prefix as u8,
                                     outbound_tag.to_string(),
                                 );
                             }
                             4 => {
+                                println!(
+                                    "{}:{}.{}.{}.{}/{}",
+                                    country_code,
+                                    cidr.ip[0],
+                                    cidr.ip[1],
+                                    cidr.ip[2],
+                                    cidr.ip[3],
+                                    cidr.prefix
+                                );
                                 let ip4 = cidr.ip.get_u32();
-                                self.lpc_matcher_v4.put(
-                                    ip4 >> (32 - cidr.prefix) << (32 - cidr.prefix),
+                                self.ip_matcher.put_v4(
+                                    ip4,
                                     cidr.prefix as u8,
                                     outbound_tag.to_string(),
                                 );
@@ -246,20 +254,12 @@ impl RouterBuilder {
         let mut regex_matchers: Vec<(String, RegexSet)> =
             std::mem::take(&mut regex_matchers).into_iter().collect();
         regex_matchers.shrink_to_fit();
-        //use deepsize::DeepSizeOf;
-        //let s1 =self.lpc_matcher_v4.deep_size_of() as f64 / (1024.0 * 1024.0);
-        //let s2 =self.lpc_matcher_v6.deep_size_of() as f64 / (1024.0 * 1024.0);
-        //info!(
-        //    "lpc_trie_cn_v4 size:{}M, lpc_trie_cn_v6:{}M, total: {}M",
-        //    s1,
-        //    s2,
-        //    s1 + s2
-        //);
+        let mut ip_matcher = std::mem::take(&mut self.ip_matcher);
+        ip_matcher.build();
 
         Ok(Router {
             domain_matchers,
-            lpc_matcher_v4: self.lpc_matcher_v4,
-            lpc_matcher_v6: self.lpc_matcher_v6,
+            ip_matcher,
             regex_matchers,
             default_outbound_tag,
         })
@@ -268,8 +268,7 @@ impl RouterBuilder {
 
 pub struct Router {
     domain_matchers: Vec<(String, Box<dyn DomainMatcher>)>,
-    lpc_matcher_v4: LPCTrie<u32>,
-    lpc_matcher_v6: LPCTrie<u128>,
+    ip_matcher: GeoIPMatcher,
     regex_matchers: Vec<(String, RegexSet)>,
     default_outbound_tag: String,
 }
@@ -286,11 +285,35 @@ fn socket_addr_v6_to_u128(ip6: Ipv6Addr) -> u128 {
 }
 
 impl Router {
+    pub fn match_socket_addr(&self, addr: &SocketAddr) -> &str {
+        use std::net::IpAddr;
+        let addr = addr.ip();
+        match addr {
+            IpAddr::V4(e) => {
+                let ip4 = socket_addr_v4_to_u32(e);
+                let res = self.ip_matcher.match4(ip4);
+                return if res.is_empty() {
+                    self.default_outbound_tag.as_str()
+                } else {
+                    res
+                };
+            }
+            IpAddr::V6(e) => {
+                let ip6 = socket_addr_v6_to_u128(e);
+                let res = self.ip_matcher.match6(ip6);
+                return if res.is_empty() {
+                    self.default_outbound_tag.as_str()
+                } else {
+                    res
+                };
+            }
+        }
+    }
     pub fn match_addr(&self, addr: &Address) -> &str {
         match addr {
             Address::SocketAddress(SocketAddr::V4(ip4)) => {
                 let ip4 = socket_addr_v4_to_u32(*ip4.ip());
-                let res = self.lpc_matcher_v4.get_with_value(ip4);
+                let res = self.ip_matcher.match4(ip4);
                 return if res.is_empty() {
                     self.default_outbound_tag.as_str()
                 } else {
@@ -299,7 +322,7 @@ impl Router {
             }
             Address::SocketAddress(SocketAddr::V6(ip6)) => {
                 let ip6 = socket_addr_v6_to_u128(*ip6.ip());
-                let res = self.lpc_matcher_v6.get_with_value(ip6);
+                let res = self.ip_matcher.match6(ip6);
                 return if res.is_empty() {
                     self.default_outbound_tag.as_str()
                 } else {

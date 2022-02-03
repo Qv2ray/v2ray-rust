@@ -1,4 +1,4 @@
-default_outbound = "out"
+default_outbound = "out2"
 
 [[ss]]
 addr = "127.0.0.1:9000"
@@ -22,7 +22,7 @@ tag = "d"
 [[outbounds]]
 chain = ["d"]
 # debug
-tag = "out"
+tag = "cn"
 
 [[outbounds]]
 chain = ["w","v","ss"]
@@ -36,13 +36,17 @@ tag = "private"
 [[inbounds]]
 addr = "127.0.0.1:1087"
 
+# [[dokodemo]]
+# addr = "127.0.0.1:12345"
+# tproxy = true
+
 [[geosite_rules]]
-tag = "d"
+tag = "cn"
 file_path = "/usr/share/v2ray/geosite.dat"
 rules = ["cn"]
 
 [[geoip_rules]]
-tag = "d"
+tag = "cn"
 file_path = "/usr/share/v2ray/geoip.dat"
 rules = ["cn"]
 
