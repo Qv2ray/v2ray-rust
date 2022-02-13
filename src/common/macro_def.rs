@@ -145,3 +145,30 @@ macro_rules! impl_read_utils {
         }
     };
 }
+
+#[macro_export]
+macro_rules! deref_udp_read {
+    () => {
+        fn poll_recv_from(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<Address>> {
+            Pin::new(&mut **self).poll_recv_from(cx, buf)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! deref_udp_write {
+    () => {
+        fn poll_send_to(
+            mut self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+            buf: &[u8],
+            target: &Address,
+        ) -> Poll<io::Result<usize>> {
+            Pin::new(&mut **self).poll_send_to(cx, buf, target)
+        }
+    };
+}

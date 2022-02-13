@@ -1,5 +1,6 @@
 use std::io;
 use std::mem::MaybeUninit;
+
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
@@ -8,26 +9,11 @@ use futures_util::ready;
 
 use tokio::io::{AsyncRead, ReadBuf};
 
+use crate::common::new_error;
+use crate::proxy::{Address, ProxyUdpStream};
 pub use copy_with_capacity::copy_with_capacity_and_counter;
 
 pub mod copy_with_capacity;
-
-// pub(crate) async fn relay<T: AsyncWrite + AsyncRead + Unpin>(t: (T, Address)) -> io::Result<()> {
-//     let (inbound_stream, addr) = t;
-//     let outbound_stream = TcpStream::connect(addr.to_string()).await?;
-//     let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
-//     let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);
-//     let mut down = 0u64;
-//     let mut up = 0u64;
-//     tokio::select! {
-//             _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE)=>{
-//             }
-//             _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE)=>{
-//             }
-//     }
-//     println!("downloaded bytes:{}, uploaded bytes:{}", down, up);
-//     Ok(())
-// }
 
 pub fn poll_read_buf<T>(
     io: &mut T,
@@ -58,6 +44,40 @@ where
         buf.advance_mut(n);
     }
     return Poll::Ready(Ok(n));
+}
+
+pub fn poll_read_datagram<T>(
+    io: &mut T,
+    cx: &mut Context<'_>,
+    buf: &mut BytesMut,
+) -> Poll<io::Result<Option<Address>>>
+where
+    T: ProxyUdpStream + Unpin,
+{
+    let mut socket_addr = None;
+    if !buf.has_remaining_mut() {
+        return Poll::Ready(Err(new_error(
+            "read datagram buf doesn't has remaining mut",
+        )));
+    }
+    let n = {
+        let dst = buf.chunk_mut();
+        let dst = unsafe { &mut *(dst as *mut _ as *mut [MaybeUninit<u8>]) };
+        let mut buf = ReadBuf::uninit(dst);
+        let ptr = buf.filled().as_ptr();
+        socket_addr = Some(ready!(Pin::new(io).poll_recv_from(cx, &mut buf)?));
+
+        // Ensure the pointer does not change from under us
+        assert_eq!(ptr, buf.filled().as_ptr());
+        buf.filled().len()
+    };
+
+    // Safety: This is guaranteed to be the number of initialized (and read)
+    // bytes due to the invariants provided by `ReadBuf::filled`.
+    unsafe {
+        buf.advance_mut(n);
+    }
+    return Poll::Ready(Ok(socket_addr));
 }
 
 pub trait PollUtil {

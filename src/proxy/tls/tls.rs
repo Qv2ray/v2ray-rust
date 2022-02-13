@@ -1,6 +1,6 @@
 use crate::common::new_error;
 use crate::debug_log;
-use crate::proxy::{BoxProxyStream, ChainableStreamBuilder};
+use crate::proxy::{BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType};
 use async_trait::async_trait;
 
 use boring::ssl::SslMethod;
@@ -57,8 +57,8 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
         }
     }
 
-    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        unimplemented!()
+    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+        Ok(io)
     }
 
     fn into_box(self) -> Box<dyn ChainableStreamBuilder> {
@@ -67,6 +67,10 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
 
     fn clone_box(&self) -> Box<dyn ChainableStreamBuilder> {
         Box::new(self.clone())
+    }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::TLS
     }
 }
 

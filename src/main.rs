@@ -1,3 +1,5 @@
+extern crate core;
+
 use crate::config::Config;
 use clap::{App, Arg};
 use std::io;

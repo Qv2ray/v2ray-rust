@@ -1,6 +1,7 @@
 use bloomfilter::Bloom;
 use spin::Mutex as SpinMutex;
 
+use crate::common::random_iv_or_salt;
 use std::sync::Arc;
 
 // A bloom filter borrowed from shadowsocks-libev's `ppbloom`
@@ -122,5 +123,23 @@ impl BloomContext {
 
         let mut ppbloom = self.nonce_ppbloom.lock();
         ppbloom.check_and_set(nonce)
+    }
+
+    /// Generate nonce (IV or SALT)
+    pub fn generate_nonce(&self, nonce: &mut [u8], unique: bool) {
+        if nonce.is_empty() {
+            return;
+        }
+
+        loop {
+            random_iv_or_salt(nonce);
+
+            // Salt already exists, generate a new one.
+            if unique && self.check_nonce_and_set(nonce) {
+                continue;
+            }
+
+            break;
+        }
     }
 }

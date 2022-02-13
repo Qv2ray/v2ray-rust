@@ -3,32 +3,33 @@ mod geoip;
 mod geosite;
 mod ip_trie;
 mod route;
+pub use crate::config::route::Router;
 
 use crate::common::net::copy_with_capacity_and_counter;
 use crate::common::{new_error, LW_BUFFER_SIZE};
 use crate::config::deserialize::{
-    from_str_to_address, from_str_to_option_address, from_str_to_security_num, from_str_to_sni,
-    from_str_to_uri, from_str_to_uuid,
+    from_str_to_address, from_str_to_cipher_kind, from_str_to_option_address,
+    from_str_to_security_num, from_str_to_sni, from_str_to_uri, from_str_to_uuid,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
 use crate::proxy::shadowsocks::ShadowsocksBuilder;
-use crate::proxy::socks::socks5::Socks5Stream;
+use crate::proxy::socks::socks5::{Socks5Stream, Socks5UdpDatagram};
 use crate::proxy::tls::tls::TlsStreamBuilder;
 use crate::proxy::trojan::TrojanStreamBuilder;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::vmess::VmessBuilder;
 use crate::proxy::websocket::BinaryWsStreamBuilder;
-use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder};
+use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder, ProtocolType};
 use actix_server::Server;
 use actix_service::fn_service;
 use lazy_static::lazy_static;
-use serde::de::Error;
+
 use serde::Deserialize;
-use serde::Deserializer;
+
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 
-use crate::config::route::{Router, RouterBuilder};
+use crate::config::route::RouterBuilder;
 use crate::debug_log;
 use crate::proxy::direct::DirectStreamBuilder;
 use domain_matcher::MatchType;
@@ -52,6 +53,7 @@ pub trait ToChainableStreamBuilder: Sync + Send {
         -> Box<dyn ChainableStreamBuilder>;
     fn tag(&self) -> &str;
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder>;
+    fn protocol_type(&self) -> ProtocolType;
 }
 impl Clone for Box<dyn ToChainableStreamBuilder> {
     fn clone(&self) -> Self {
@@ -96,6 +98,10 @@ impl ToChainableStreamBuilder for VmessConfig {
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
     }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::VMESS
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -122,6 +128,10 @@ impl ToChainableStreamBuilder for TrojanConfig {
     }
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
+    }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::TROJAN
     }
 }
 
@@ -151,6 +161,10 @@ impl ToChainableStreamBuilder for TlsConfig {
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
     }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::TROJAN
+    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -178,6 +192,10 @@ impl ToChainableStreamBuilder for WebsocketConfig {
     }
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
+    }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::WS
     }
 }
 
@@ -210,6 +228,10 @@ impl ToChainableStreamBuilder for DirectConfig {
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
     }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::DIRECT
+    }
 }
 
 impl ToChainableStreamBuilder for ShadowsocksConfig {
@@ -230,21 +252,10 @@ impl ToChainableStreamBuilder for ShadowsocksConfig {
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
         Box::new(self.clone())
     }
-}
 
-fn from_str_to_cipher_kind<'de, D>(deserializer: D) -> Result<CipherKind, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let method: &str = Deserialize::deserialize(deserializer)?;
-    let method = match method {
-        "none" | "plain" => CipherKind::None,
-        "aes-128-gcm" => CipherKind::Aes128Gcm,
-        "aes-256-gcm" => CipherKind::Aes256Gcm,
-        "chacha20-ietf-poly1305" | "chacha20-poly1305" => CipherKind::ChaCha20Poly1305,
-        _ => return Err(D::Error::custom("wrong ss encryption method")),
-    };
-    Ok(method)
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::SS
+    }
 }
 
 #[derive(Deserialize)]
@@ -257,6 +268,8 @@ pub struct Outbounds {
 pub struct Inbounds {
     #[serde(deserialize_with = "from_str_to_address")]
     addr: Address,
+    #[serde(default)]
+    enable_udp: bool,
 }
 #[derive(Deserialize)]
 pub struct GeoSiteRules {
@@ -527,7 +540,7 @@ impl ConfigServerBuilder {
                             async move {
                                 let dokodemo_door_addr = io.local_addr()?;
                                 if let Some(addr) = target_addr {
-                                    let out_stream = TcpStream::connect(addr.to_string()).await?;
+                                    let out_stream = addr.connect_tcp().await?;
                                     return relay(io, out_stream).await;
                                 }
                                 let stream_builder;
@@ -548,17 +561,31 @@ impl ConfigServerBuilder {
                     })?;
                 }
                 for inbound in self.inbounds.into_iter() {
-                    let inner_map = inner_map.clone();
-                    let router = router.clone();
+                    let inner_map_1 = inner_map.clone();
+                    let router_1 = router.clone();
+                    let enable_udp = inbound.enable_udp;
+
                     server = server.bind("in", inbound.addr.to_string(), move || {
-                        let inner_map = inner_map.clone();
-                        let router = router.clone();
+                        let inner_map = inner_map_1.clone();
+                        let router = router_1.clone();
                         fn_service(move |io: TcpStream| {
                             let inner_map = inner_map.clone();
                             let router = router.clone();
                             async move {
+                                let peer_ip = io.peer_addr()?.ip();
+                                let addr = if enable_udp {
+                                    Some(SocketAddr::new(peer_ip, 0))
+                                } else {
+                                    None
+                                };
                                 let stream = Socks5Stream::new(io);
-                                let x = stream.init(None).await?;
+                                let mut udp_socket = None;
+                                let x = stream.init(addr, &mut udp_socket).await?;
+                                if let Some(udp_socket) = udp_socket {
+                                    Socks5UdpDatagram::run(udp_socket, router, inner_map, x.0)
+                                        .await?;
+                                    return Ok(());
+                                }
                                 let stream_builder;
                                 {
                                     let ob = router.match_addr(&x.1);
@@ -592,7 +619,7 @@ where
             _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*20)=>{
             }
     }
-    println!("downloaded bytes:{}, uploaded bytes:{}", down, up);
+    info!("downloaded bytes:{}, uploaded bytes:{}", down, up);
     Ok(())
 }
 

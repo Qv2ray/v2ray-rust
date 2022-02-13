@@ -203,15 +203,15 @@ impl RouterBuilder {
                                 );
                             }
                             4 => {
-                                println!(
-                                    "{}:{}.{}.{}.{}/{}",
-                                    country_code,
-                                    cidr.ip[0],
-                                    cidr.ip[1],
-                                    cidr.ip[2],
-                                    cidr.ip[3],
-                                    cidr.prefix
-                                );
+                                // debug_log!(
+                                //     "{}:{}.{}.{}.{}/{}",
+                                //     country_code,
+                                //     cidr.ip[0],
+                                //     cidr.ip[1],
+                                //     cidr.ip[2],
+                                //     cidr.ip[3],
+                                //     cidr.prefix
+                                // );
                                 let ip4 = cidr.ip.get_u32();
                                 self.ip_matcher.put_v4(
                                     ip4,

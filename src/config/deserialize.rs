@@ -1,3 +1,4 @@
+use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::{Address, AddressError};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
@@ -5,6 +6,20 @@ use tokio_tungstenite::tungstenite::http::Uri;
 use uuid::Uuid;
 use webpki::DnsNameRef;
 
+pub(super) fn from_str_to_cipher_kind<'de, D>(deserializer: D) -> Result<CipherKind, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let method: &str = Deserialize::deserialize(deserializer)?;
+    let method = match method {
+        "none" | "plain" => CipherKind::None,
+        "aes-128-gcm" => CipherKind::Aes128Gcm,
+        "aes-256-gcm" => CipherKind::Aes256Gcm,
+        "chacha20-ietf-poly1305" | "chacha20-poly1305" => CipherKind::ChaCha20Poly1305,
+        _ => return Err(D::Error::custom("wrong ss encryption method")),
+    };
+    Ok(method)
+}
 pub(super) fn from_str_to_address<'de, D>(deserializer: D) -> Result<Address, D::Error>
 where
     D: Deserializer<'de>,

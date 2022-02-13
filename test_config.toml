@@ -35,6 +35,7 @@ tag = "private"
 
 [[inbounds]]
 addr = "127.0.0.1:1087"
+enable_udp = true
 
 # [[dokodemo]]
 # addr = "127.0.0.1:12345"

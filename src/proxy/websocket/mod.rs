@@ -6,7 +6,9 @@ use tokio_tungstenite::{client_async_with_config, tungstenite::Message, WebSocke
 
 use crate::common::new_error;
 use crate::debug_log;
-use crate::proxy::{BoxProxyStream, ChainableStreamBuilder, ProxySteam};
+use crate::proxy::{
+    BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxySteam,
+};
 use futures_util::ready;
 use futures_util::sink::Sink;
 use futures_util::Stream;
@@ -166,8 +168,8 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
         Ok(Box::new(BinaryWsStream::new(stream)))
     }
 
-    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        unimplemented!()
+    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+        Ok(io)
     }
 
     fn into_box(self) -> Box<dyn ChainableStreamBuilder> {
@@ -176,5 +178,9 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
 
     fn clone_box(&self) -> Box<dyn ChainableStreamBuilder> {
         Box::new(self.clone())
+    }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::WS
     }
 }

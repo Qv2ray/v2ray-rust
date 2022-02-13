@@ -15,6 +15,7 @@ use crate::common::{random_iv_or_salt, sha256};
 use crate::proxy::vmess::aead::{VmessAeadReader, VmessAeadWriter, VmessSecurity};
 use crate::proxy::vmess::aead_header::{seal_vmess_aead_header, VmessHeaderReader};
 use crate::proxy::vmess::vmess_option::VmessOption;
+use crate::proxy::{Address, ProxyUdpStream, UdpRead, UdpWrite};
 use crate::{
     debug_log, impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
     md5,
@@ -268,3 +269,43 @@ where
 }
 
 impl_async_useful_traits!(VmessStream);
+
+impl<S: AsyncWrite + AsyncRead + Send + Unpin> UdpRead for VmessStream<S> {
+    /// Vmess can't implement full-cone nat.
+    /// So we just return the first address in handshake packet.
+    fn poll_recv_from(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<Address>> {
+        let addr = self.option.addr.clone();
+        self.priv_poll_read(cx, buf).map_ok(|_| addr)
+    }
+}
+
+impl<S: AsyncWrite + AsyncRead + Send + Unpin> UdpWrite for VmessStream<S> {
+    /// Vmess can't implement full-cone nat.
+    fn poll_send_to(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        _target: &Address,
+    ) -> Poll<io::Result<usize>> {
+        #[cfg(feature = "strict-vmess-udp")]
+        {
+            if self.option.addr != *target {
+                return Err(new_error(
+                    "Vmess can't change target udp address different from first packet. Try using a full-cone protocol instead.",
+                ))
+                    .into();
+            }
+        }
+        self.priv_poll_write(cx, buf)
+    }
+}
+
+impl<S: AsyncWrite + AsyncRead + Send + Unpin> ProxyUdpStream for VmessStream<S> {
+    fn is_tokio_socket(&self) -> bool {
+        false
+    }
+}

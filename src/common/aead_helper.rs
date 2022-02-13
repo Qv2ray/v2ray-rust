@@ -18,7 +18,7 @@ pub trait AeadCipherHelper: AeadInPlace {
     fn decrypt_inplace_with_slice(&self, nonce: &[u8], aad: &[u8], buffer: &mut [u8]) -> bool {
         let nonce = GcmNonce::from_slice(nonce);
         let tag_pos = buffer.len() - Self::TagSize::to_usize();
-        let (msg, tag) = buffer.as_mut().split_at_mut(tag_pos);
+        let (msg, tag) = buffer.split_at_mut(tag_pos);
         self.decrypt_in_place_detached(nonce, aad, msg, Tag::<Self>::from_slice(tag))
             .is_ok()
     }

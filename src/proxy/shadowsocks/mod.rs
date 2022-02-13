@@ -2,7 +2,9 @@ use crate::common::openssl_bytes_to_key;
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::SharedBloomContext;
 use crate::proxy::shadowsocks::crypto_io::CryptoStream;
-use crate::proxy::{Address, BoxProxyStream, ChainableStreamBuilder};
+use crate::proxy::{
+    Address, BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType,
+};
 
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
@@ -12,6 +14,7 @@ mod aead;
 pub mod aead_helper;
 pub mod context;
 pub mod crypto_io;
+mod udp_crypto_io;
 
 fn ss_hkdf_sha1(iv_or_salt: &[u8], key: &[u8]) -> [u8; 64] {
     use hkdf::Hkdf;
@@ -69,7 +72,7 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
         }
     }
 
-    async fn build_udp(&self, _io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+    async fn build_udp(&self, _io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
         todo!()
     }
 
@@ -79,5 +82,9 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
 
     fn clone_box(&self) -> Box<dyn ChainableStreamBuilder> {
         Box::new(self.clone())
+    }
+
+    fn protocol_type(&self) -> ProtocolType {
+        ProtocolType::SS
     }
 }

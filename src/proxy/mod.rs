@@ -1,25 +1,30 @@
-use crate::common::new_error;
 use crate::config::ToChainableStreamBuilder;
-use async_trait::async_trait;
-use bytes::{Buf, BufMut, BytesMut};
-use std::fmt::{Debug, Formatter};
-use std::io::{Cursor, Error, ErrorKind};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6, ToSocketAddrs};
-use std::num::ParseIntError;
-use std::str::FromStr;
-use std::vec;
-use std::{fmt, io};
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use tokio::net::TcpStream;
+use crate::deref_udp_read;
+use crate::deref_udp_write;
 
+use async_trait::async_trait;
+
+use std::net::{IpAddr, SocketAddr};
+use std::num::ParseIntError;
+use std::pin::Pin;
+
+use std::io;
+use std::task::{Context, Poll};
+use std::vec;
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+use tokio::net::{TcpStream, UdpSocket};
+
+mod address;
 pub mod direct;
 pub mod dokodemo_door;
 pub mod shadowsocks;
 pub mod socks;
 pub mod tls;
 pub mod trojan;
+mod udp;
 pub mod vmess;
 pub mod websocket;
+pub use address::{Address, AddressError};
 
 #[allow(dead_code)]
 fn decode_hex(s: &str) -> Result<Vec<u8>, ParseIntError> {
@@ -46,328 +51,22 @@ macro_rules! debug_log {
     ($( $args:expr ),*) => {};
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum Address {
-    /// Socket address (IP Address)
-    SocketAddress(SocketAddr),
-    /// Domain name address and port
-    DomainNameAddress(String, u16),
-}
-
-/// Parse `Address` error
-#[derive(Debug)]
-pub struct AddressError {
-    message: String,
-}
-
-impl AddressError {
-    pub fn as_str(&self) -> &str {
-        self.message.as_str()
-    }
-}
-
-impl From<AddressError> for io::Error {
-    fn from(e: AddressError) -> Self {
-        io::Error::new(ErrorKind::Other, format!("address error: {}", e.message))
-    }
-}
-
-impl FromStr for Address {
-    type Err = AddressError;
-
-    fn from_str(s: &str) -> Result<Address, AddressError> {
-        match s.parse::<SocketAddr>() {
-            Ok(addr) => Ok(Address::SocketAddress(addr)),
-            Err(..) => {
-                let mut sp = s.split(':');
-                match (sp.next(), sp.next()) {
-                    (Some(dn), Some(port)) => match port.parse::<u16>() {
-                        Ok(port) => Ok(Address::DomainNameAddress(dn.to_owned(), port)),
-                        Err(..) => Err(AddressError {
-                            message: s.to_owned(),
-                        }),
-                    },
-                    (Some(dn), None) => {
-                        // Assume it is 80 (http's default port)
-                        Ok(Address::DomainNameAddress(dn.to_owned(), 80))
-                    }
-                    _ => Err(AddressError {
-                        message: s.to_owned(),
-                    }),
-                }
-            }
-        }
-    }
-}
-impl Address {
-    pub const ADDR_TYPE_IPV4: u8 = 1;
-    pub const ADDR_TYPE_DOMAIN_NAME: u8 = 3;
-    pub const ADDR_TYPE_IPV6: u8 = 4;
-    #[inline]
-    fn new_dummy_address() -> Address {
-        Address::SocketAddress(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 0))
-    }
-
-    #[inline]
-    fn serialized_len(&self) -> usize {
-        match self {
-            Address::SocketAddress(SocketAddr::V4(..)) => 1 + 4 + 2,
-            Address::SocketAddress(SocketAddr::V6(..)) => 1 + 8 * 2 + 2,
-            Address::DomainNameAddress(ref dmname, _) => 1 + 1 + dmname.len() + 2,
-        }
-    }
-
-    pub async fn read_from_stream<R>(stream: &mut R) -> Result<Address, Error>
-    where
-        R: AsyncRead + Unpin,
-    {
-        let mut addr_type_buf = [0u8; 1];
-        let _ = stream.read_exact(&mut addr_type_buf).await?;
-
-        let addr_type = addr_type_buf[0];
-        match addr_type {
-            Self::ADDR_TYPE_IPV4 => {
-                let mut buf = [0u8; 6];
-                stream.read_exact(&mut buf).await?;
-                let mut cursor = Cursor::new(buf);
-
-                let v4addr = Ipv4Addr::new(
-                    cursor.get_u8(),
-                    cursor.get_u8(),
-                    cursor.get_u8(),
-                    cursor.get_u8(),
-                );
-                let port = cursor.get_u16();
-                Ok(Address::SocketAddress(SocketAddr::V4(SocketAddrV4::new(
-                    v4addr, port,
-                ))))
-            }
-            Self::ADDR_TYPE_IPV6 => {
-                let mut buf = [0u8; 18];
-                stream.read_exact(&mut buf).await?;
-
-                let mut cursor = Cursor::new(&buf);
-                let v6addr = Ipv6Addr::new(
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                    cursor.get_u16(),
-                );
-                let port = cursor.get_u16();
-
-                Ok(Address::SocketAddress(SocketAddr::V6(SocketAddrV6::new(
-                    v6addr, port, 0, 0,
-                ))))
-            }
-            Self::ADDR_TYPE_DOMAIN_NAME => {
-                let mut length_buf = [0u8; 1];
-                let mut addr_buf = [0u8; 255 + 2];
-                stream.read_exact(&mut length_buf).await?;
-                let length = length_buf[0] as usize;
-
-                // Len(Domain) + Len(Port)
-                stream.read_exact(&mut addr_buf[..length + 2]).await?;
-
-                let domain_buf = &addr_buf[..length];
-                let addr = match String::from_utf8(domain_buf.to_vec()) {
-                    Ok(addr) => addr,
-                    Err(..) => {
-                        return Err(Error::new(io::ErrorKind::Other, "invalid address encoding"))
-                    }
-                };
-                let mut port_buf = &addr_buf[length..length + 2];
-                let port = port_buf.get_u16();
-
-                Ok(Address::DomainNameAddress(addr, port))
-            }
-            _ => {
-                // Wrong Address Type . Socks5 only supports ipv4, ipv6 and domain name
-                Err(Error::new(
-                    io::ErrorKind::Other,
-                    format!("not supported address type {:#x}", addr_type),
-                ))
-            }
-        }
-    }
-
-    pub fn read_from_buf(buf: &[u8]) -> io::Result<Self> {
-        let mut cur = Cursor::new(buf);
-        if cur.remaining() < 1 + 1 {
-            return Err(new_error("invalid address buffer"));
-        }
-        let addr_type = cur.get_u8();
-        match addr_type {
-            Self::ADDR_TYPE_IPV4 => {
-                if cur.remaining() < 4 + 2 {
-                    return Err(new_error("IPv4 address too short"));
-                }
-                let addr = Ipv4Addr::new(cur.get_u8(), cur.get_u8(), cur.get_u8(), cur.get_u8());
-                let port = cur.get_u16();
-                Ok(Address::SocketAddress(SocketAddr::V4(SocketAddrV4::new(
-                    addr, port,
-                ))))
-            }
-            Self::ADDR_TYPE_DOMAIN_NAME => {
-                let domain_len = cur.get_u8() as usize;
-                if cur.remaining() < domain_len {
-                    return Err(new_error("Domain name too short"));
-                }
-                let mut domain_name = vec![0u8; domain_len];
-                cur.copy_to_slice(&mut domain_name);
-                let port = cur.get_u16();
-                let domain_name = String::from_utf8(domain_name).map_err(|e| {
-                    new_error(format!("invalid utf8 domain name {}", e.to_string()))
-                })?;
-                Ok(Address::DomainNameAddress(domain_name, port))
-            }
-            Self::ADDR_TYPE_IPV6 => {
-                if cur.remaining() < 8 * 2 + 2 {
-                    return Err(new_error("IPv4 address too short"));
-                }
-                let addr = Ipv6Addr::new(
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                    cur.get_u16(),
-                );
-                let port = cur.get_u16();
-                Ok(Address::SocketAddress(SocketAddr::V6(SocketAddrV6::new(
-                    addr, port, 0, 0,
-                ))))
-            }
-            _ => Err(new_error(format!("unknown address type {}", addr_type))),
-        }
-    }
-
-    #[inline]
-    pub async fn write_to_stream<W>(&self, writer: &mut W) -> io::Result<()>
-    where
-        W: AsyncWrite + Unpin,
-    {
-        let mut buf = BytesMut::with_capacity(self.serialized_len());
-        self.write_to_buf(&mut buf);
-        writer.write(&buf).await?;
-        Ok(())
-    }
-
-    pub fn write_to_buf<B: BufMut>(&self, buf: &mut B) {
-        match self {
-            Self::SocketAddress(SocketAddr::V4(addr)) => {
-                buf.put_u8(Self::ADDR_TYPE_IPV4);
-                buf.put_slice(&addr.ip().octets());
-                buf.put_u16(addr.port());
-            }
-            Self::SocketAddress(SocketAddr::V6(addr)) => {
-                buf.put_u8(Self::ADDR_TYPE_IPV6);
-                for seg in &addr.ip().segments() {
-                    buf.put_u16(*seg);
-                }
-                buf.put_u16(addr.port());
-            }
-            Self::DomainNameAddress(domain_name, port) => {
-                buf.put_u8(Self::ADDR_TYPE_DOMAIN_NAME);
-                buf.put_u8(domain_name.len() as u8);
-                buf.put_slice(&domain_name.as_bytes()[..]);
-                buf.put_u16(*port);
-            }
-        }
-    }
-    pub fn write_to_buf_vmess<B: BufMut>(&self, buf: &mut B) {
-        match self {
-            Self::SocketAddress(SocketAddr::V4(addr)) => {
-                buf.put_u16(addr.port());
-                buf.put_u8(0x01);
-                buf.put_slice(&addr.ip().octets());
-            }
-            Self::SocketAddress(SocketAddr::V6(addr)) => {
-                buf.put_u16(addr.port());
-                buf.put_u8(0x03);
-                for seg in &addr.ip().segments() {
-                    buf.put_u16(*seg);
-                }
-            }
-            Self::DomainNameAddress(domain_name, port) => {
-                buf.put_u16(*port);
-                buf.put_u8(0x02);
-                buf.put_u8(domain_name.len() as u8);
-                buf.put_slice(&domain_name.as_bytes()[..]);
-            }
-        }
-    }
-
-    pub fn get_sock_addr(&self) -> SocketAddr {
-        match self {
-            Address::SocketAddress(e) => *e,
-            Address::DomainNameAddress(_, _) => {
-                panic!("domain can't get sock addr");
-            }
-        }
-    }
-}
-
-impl Debug for Address {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
-            Address::SocketAddress(ref addr) => write!(f, "{}", addr),
-            Address::DomainNameAddress(ref addr, ref port) => write!(f, "{}:{}", addr, port),
-        }
-    }
-}
-
-impl fmt::Display for Address {
-    #[inline]
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        match *self {
-            Address::SocketAddress(ref addr) => write!(f, "{}", addr),
-            Address::DomainNameAddress(ref addr, ref port) => write!(f, "{}:{}", addr, port),
-        }
-    }
-}
-
-impl ToSocketAddrs for Address {
-    type Iter = vec::IntoIter<SocketAddr>;
-
-    fn to_socket_addrs(&self) -> io::Result<vec::IntoIter<SocketAddr>> {
-        match self.clone() {
-            Address::SocketAddress(addr) => Ok(vec![addr].into_iter()),
-            Address::DomainNameAddress(addr, port) => (&addr[..], port).to_socket_addrs(),
-        }
-    }
-}
-
-impl From<SocketAddr> for Address {
-    fn from(s: SocketAddr) -> Address {
-        Address::SocketAddress(s)
-    }
-}
-
-impl From<(String, u16)> for Address {
-    fn from((dn, port): (String, u16)) -> Address {
-        Address::DomainNameAddress(dn, port)
-    }
-}
-
-impl From<&Address> for Address {
-    fn from(addr: &Address) -> Address {
-        addr.clone()
-    }
+pub enum ProtocolType {
+    SS,
+    TLS,
+    VMESS,
+    WS,
+    TROJAN,
+    DIRECT,
 }
 
 #[async_trait]
 pub trait ChainableStreamBuilder: Sync + Send {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
-    async fn build_udp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream>;
+    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream>;
     fn into_box(self) -> Box<dyn ChainableStreamBuilder>;
     fn clone_box(&self) -> Box<dyn ChainableStreamBuilder>;
+    fn protocol_type(&self) -> ProtocolType;
 }
 
 impl Clone for Box<dyn ChainableStreamBuilder> {
@@ -375,17 +74,87 @@ impl Clone for Box<dyn ChainableStreamBuilder> {
         self.clone_box()
     }
 }
+pub trait UdpRead {
+    fn poll_recv_from(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut tokio::io::ReadBuf<'_>,
+    ) -> Poll<io::Result<Address>>;
+}
+
+pub trait UdpWrite {
+    fn poll_send_to(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        target: &Address,
+    ) -> Poll<io::Result<usize>>;
+}
+
+pub trait ProxyUdpStream: AsyncRead + AsyncWrite + Send + Unpin + UdpRead + UdpWrite {
+    fn is_tokio_socket(&self) -> bool;
+}
+
+impl<T: ?Sized + UdpRead + Unpin> UdpRead for Box<T> {
+    deref_udp_read!();
+}
+impl<T: ?Sized + UdpWrite + Unpin> UdpWrite for Box<T> {
+    deref_udp_write!();
+}
+impl<T: ?Sized + UdpRead + Unpin> UdpRead for &mut T {
+    deref_udp_read!();
+}
+impl<T: ?Sized + UdpWrite + Unpin> UdpWrite for &mut T {
+    deref_udp_write!();
+}
+
+impl<T: ?Sized + ProxyUdpStream> ProxyUdpStream for Box<T> {
+    fn is_tokio_socket(&self) -> bool {
+        (**self).is_tokio_socket()
+    }
+}
+
+impl UdpRead for TcpStream {
+    fn poll_recv_from(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<Address>> {
+        todo!()
+    }
+}
+
+impl UdpWrite for TcpStream {
+    fn poll_send_to(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &[u8],
+        _target: &Address,
+    ) -> Poll<io::Result<usize>> {
+        todo!()
+    }
+}
+
+impl ProxyUdpStream for TcpStream {
+    fn is_tokio_socket(&self) -> bool {
+        true
+    }
+}
 
 pub trait ProxySteam: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> ProxySteam for T {}
 
 pub type BoxProxyStream = Box<dyn ProxySteam>;
+pub type BoxProxyUdpStream = Box<dyn ProxyUdpStream>;
 
 #[derive(Clone)]
 pub struct ChainStreamBuilder {
     builders: Vec<Box<dyn ChainableStreamBuilder>>,
     remote_addr: Option<Address>,
     last_builder: Option<Box<dyn ToChainableStreamBuilder>>,
+    // is the first non tls/direct/websocket protocol uot?
+    is_uot: bool,
+    is_full_cone: bool,
 }
 
 impl ChainStreamBuilder {
@@ -394,6 +163,8 @@ impl ChainStreamBuilder {
             builders: vec![],
             remote_addr: None,
             last_builder: None,
+            is_uot: false,
+            is_full_cone: true,
         }
     }
 
@@ -406,15 +177,31 @@ impl ChainStreamBuilder {
     }
 
     pub fn push_last_builder(&mut self, builder: Box<dyn ToChainableStreamBuilder>) {
+        self.check_builder_protocol_type(builder.protocol_type());
         self.last_builder = Some(builder);
     }
 
+    fn check_builder_protocol_type(&mut self, ty: ProtocolType) {
+        match ty {
+            ProtocolType::VMESS => {
+                self.is_uot = true;
+                self.is_full_cone = false;
+            }
+            ProtocolType::TROJAN => {
+                self.is_uot = true;
+            }
+            _ => {}
+        }
+    }
+
     pub fn push(&mut self, builder: Box<dyn ChainableStreamBuilder>) {
+        self.check_builder_protocol_type(builder.protocol_type());
         self.builders.push(builder);
     }
+
     pub async fn build_tcp(&self, proxy_addr: Address) -> io::Result<BoxProxyStream> {
-        if let Some(remote_addr) = &self.remote_addr {
-            let outer_stream = TcpStream::connect(remote_addr.to_string()).await?;
+        return if let Some(remote_addr) = &self.remote_addr {
+            let outer_stream = remote_addr.connect_tcp().await?;
             let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
             for b in self.builders.iter() {
                 outer_stream = b.build_tcp(outer_stream).await?;
@@ -425,9 +212,9 @@ impl ChainStreamBuilder {
                     .build_tcp(outer_stream)
                     .await?;
             }
-            return Ok(outer_stream);
+            Ok(outer_stream)
         } else {
-            let outer_stream = TcpStream::connect(proxy_addr.to_string()).await?;
+            let outer_stream = proxy_addr.connect_tcp().await?;
             let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
             for b in self.builders.iter() {
                 outer_stream = b.build_tcp(outer_stream).await?;
@@ -438,7 +225,41 @@ impl ChainStreamBuilder {
                     .build_tcp(outer_stream)
                     .await?;
             }
-            return Ok(outer_stream);
+            Ok(outer_stream)
+        };
+    }
+
+    // if chain is uot, then before uot builder all builder must build tcp inside
+    pub async fn build_udp(
+        &self,
+        proxy_addr: Address,
+        udp_bind_ip: IpAddr,
+    ) -> io::Result<BoxProxyUdpStream> {
+        let mut outer_stream: BoxProxyUdpStream;
+        if let Some(remote_addr) = &self.remote_addr {
+            if self.is_uot {
+                outer_stream = Box::new(remote_addr.connect_tcp().await?);
+            } else {
+                let socket = UdpSocket::bind(SocketAddr::new(udp_bind_ip, 0)).await?;
+                outer_stream = Box::new(remote_addr.connect_udp(socket).await?);
+            }
+        } else {
+            if self.is_uot {
+                outer_stream = Box::new(proxy_addr.connect_tcp().await?);
+            } else {
+                let socket = UdpSocket::bind(SocketAddr::new(udp_bind_ip, 0)).await?;
+                outer_stream = Box::new(proxy_addr.connect_udp(socket).await?);
+            }
         }
+        for b in self.builders.iter() {
+            outer_stream = b.build_udp(outer_stream).await?;
+        }
+        if let Some(b) = &self.last_builder {
+            outer_stream = b
+                .to_chainable_stream_builder(Some(proxy_addr))
+                .build_udp(outer_stream)
+                .await?;
+        }
+        Ok(outer_stream)
     }
 }
