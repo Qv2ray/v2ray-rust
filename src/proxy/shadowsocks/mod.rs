@@ -6,6 +6,7 @@ use crate::proxy::{
     Address, BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType,
 };
 
+use crate::proxy::shadowsocks::udp_crypto_io::ShadowSocksUdpStream;
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -72,8 +73,13 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
         }
     }
 
-    async fn build_udp(&self, _io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
-        todo!()
+    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+        Ok(Box::new(ShadowSocksUdpStream::new(
+            io,
+            self.context.clone(),
+            self.method,
+            self.key.clone(),
+        )))
     }
 
     fn into_box(self) -> Box<dyn ChainableStreamBuilder> {

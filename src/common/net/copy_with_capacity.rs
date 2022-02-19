@@ -1,4 +1,3 @@
-use crate::proxy::Address;
 use futures_util::ready;
 use std::future::Future;
 use std::io;
@@ -6,18 +5,6 @@ use std::io;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
-
-#[derive(Debug)]
-struct CopyUdpWithCapacity<'a, R: ?Sized, W: ?Sized> {
-    reader: &'a mut R,
-    read_done: bool,
-    writer: &'a mut W,
-    pos: usize,
-    cap: usize,
-    amt: &'a mut u64,
-    buf: Box<[u8]>,
-    addr: Address,
-}
 
 #[derive(Debug)]
 struct CopyWithCapacity<'a, R: ?Sized, W: ?Sized> {

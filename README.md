@@ -43,6 +43,7 @@ tag = "private"
 
 [[inbounds]]
 addr = "127.0.0.1:1087"
+enable_udp = true
 
 [[dokodemo]]
 addr = "127.0.0.1:12345"
@@ -79,7 +80,7 @@ rules = ["private"]
 
 ### socks5
 - ✅ socks5 Inbound
-- 🚧 UDP support
+- ✅ UDP support
 
 ### http
 - 🚧 http Inbound
@@ -88,22 +89,25 @@ rules = ["private"]
 ### Vmess
 
 - ✅ Vmess Aead Outbound
-- 🚧 UDP support
+- ✅ UDP support
 
 ### Shadowsocks
 
 - ✅ Shadowsocks Outbound
-- 🚧 UDP support
+- ✅ UDP support
 
 ### Trojan
 - ✅ Trojan
-- 🚧 UDP support
+- ✅ UDP support
 
 ### VLESS
 - ❌ 
 
 ### Chainable Steam
 - ✅
+
+### Chainable UDP
+- 🚧 
 
 ### Stream settings
 

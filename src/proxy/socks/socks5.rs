@@ -1,4 +1,4 @@
-use crate::common::{new_error, LW_BUFFER_SIZE};
+use crate::common::{new_error, HW_BUFFER_SIZE, LW_BUFFER_SIZE};
 use crate::config::Router;
 use crate::proxy::socks::{auth_methods, response_code, socks_command, SOCKS_VERSION};
 use crate::proxy::ChainStreamBuilder;
@@ -245,7 +245,7 @@ impl Socks5UdpDatagram {
         let (local_addr_sender, local_addr_receiver) = tokio::sync::oneshot::channel();
         let framed_udp = UdpFramed::new(socket, Socks5UdpCodec);
         let (mut w, mut r) = framed_udp.split();
-        let (tx_remote_packet, mut rx_remote_packet) = tokio::sync::mpsc::channel(128);
+        let (tx_remote_packet, mut rx_remote_packet) = tokio::sync::mpsc::channel(32);
         let local_recv_handle = actix_rt::spawn(async move {
             let tx_remote_packet = tx_remote_packet;
             let mut set_local_addr = false;
@@ -272,7 +272,8 @@ impl Socks5UdpDatagram {
                     let (tx, mut rx) = tokio::sync::watch::channel((target_addr, buf));
                     let tx_remote_packet = tx_remote_packet.clone();
                     let read_handle = actix_rt::spawn(async move {
-                        let mut buf = BytesMut::with_capacity(20 * 1024);
+                        // todo: set a reasonable buffer size
+                        let mut buf = BytesMut::with_capacity(HW_BUFFER_SIZE);
                         loop {
                             let (n, addr) = out_stream_r.recv_from(&mut buf).await?;
                             debug_log!("read from remote addr:{}, recv len:{}", addr, n);
@@ -310,6 +311,7 @@ impl Socks5UdpDatagram {
                     buf.len(),
                     from_addr
                 );
+                // improve: a buffer pool?
                 w.feed(((buf.freeze(), from_addr), local_addr)).await?;
                 w.flush().await?;
             }

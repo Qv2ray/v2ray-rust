@@ -116,10 +116,10 @@ impl UdpWrite for ConnectedUdpSocket {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-        target: &Address,
+        _target: &Address,
     ) -> Poll<io::Result<usize>> {
         let this = self.get_mut();
-        this.0.poll_send_to(cx, buf, target.get_sock_addr())
+        this.0.poll_send_to(cx, buf, this.1)
     }
 }
 

@@ -15,8 +15,6 @@ use std::task::{Context, Poll};
 use std::{cmp, io, slice};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-//pub const AES_128_GCM_OVERHEAD: usize = 16;
-//pub const CHACHA20POLY1305_GCM_OVERHEAD: usize = 16;
 pub struct VmessAeadWriter {
     security: VmessSecurity,
     buffer: BytesMut,
