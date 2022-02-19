@@ -1,4 +1,4 @@
-default_outbound = "out2"
+default_outbound = "cn"
 
 [[ss]]
 addr = "127.0.0.1:9000"
@@ -12,6 +12,11 @@ uuid = "b831381d-6324-4d53-ad4f-8cda48b30811"
 method = "aes-128-gcm"
 tag = "v"
 
+[[trojan]]
+addr = "127.0.0.1:10002"
+password = "password"
+tag = "t"
+
 [[ws]]
 uri = "ws://127.0.0.1:10002/"
 tag = "w"
@@ -20,14 +25,9 @@ tag = "w"
 tag = "d"
 
 [[outbounds]]
-chain = ["d"]
+chain = ["t"]
 # debug
 tag = "cn"
-
-[[outbounds]]
-chain = ["w","v","ss"]
-# debug
-tag = "out2"
 
 [[outbounds]]
 chain = ["d"]

@@ -60,6 +60,8 @@ gentian = "0.1.1"
 
 [profile.release]
 lto = true
+opt-level = 3
+codegen-units = 1
 
 [build-dependencies]
 protoc-rust = "2.26.1"

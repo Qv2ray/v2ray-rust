@@ -1,8 +1,20 @@
-use crate::common::new_error;
+use crate::impl_flush_shutdown;
 use crate::proxy::Address;
+use crate::proxy::ProxyUdpStream;
+use crate::{common::net::PollUtil, common::new_error, proxy::UdpRead, proxy::UdpWrite};
 use bytes::BufMut;
 use std::io;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
+
+use crate::impl_read_utils;
+use bytes::Buf;
+use bytes::BytesMut;
+use futures_util::ready;
+use gentian::gentian;
+use std::cmp;
+use std::io::ErrorKind;
 
 const CMD_TCP_CONNECT: u8 = 0x01;
 const CMD_UDP_ASSOCIATE: u8 = 0x03;
@@ -42,6 +54,7 @@ pub enum RequestHeader {
 }
 
 impl RequestHeader {
+    #[allow(dead_code)]
     pub async fn read_from<R>(
         stream: &mut R,
         valid_hash: &[u8],
@@ -103,5 +116,306 @@ impl RequestHeader {
 
         w.write(&buf).await?;
         Ok(())
+    }
+}
+
+/// ```plain
+/// +------+----------+----------+--------+---------+----------+
+/// | ATYP | DST.ADDR | DST.PORT | Length |  CRLF   | Payload  |
+/// +------+----------+----------+--------+---------+----------+
+/// |  1   | Variable |    2     |   2    | X'0D0A' | Variable |
+/// +------+----------+----------+--------+---------+----------+
+/// ```
+pub struct TrojanUdpStream<T> {
+    stream: T,
+    reader: TrojanUdpReader,
+    writer: TrojanUdpWriter,
+}
+
+impl<T> TrojanUdpStream<T> {
+    pub fn new(stream: T) -> Self {
+        Self {
+            stream,
+            reader: TrojanUdpReader::new(),
+            writer: TrojanUdpWriter::new(),
+        }
+    }
+}
+
+impl<T: AsyncWrite + Unpin> TrojanUdpStream<T> {
+    impl_flush_shutdown!();
+}
+
+impl<T: AsyncRead + Send + Unpin> UdpRead for TrojanUdpStream<T> {
+    fn poll_recv_from(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<Address>> {
+        let this = self.get_mut();
+        this.reader
+            .priv_poll_read(&mut this.stream, cx, buf)
+            .map_ok(|_| this.reader.take_addr())
+    }
+}
+
+impl<T: AsyncWrite + Send + Unpin> UdpWrite for TrojanUdpStream<T> {
+    fn poll_send_to(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+        target: &Address,
+    ) -> Poll<io::Result<usize>> {
+        let this = self.get_mut();
+        this.writer
+            .priv_poll_write(&mut this.stream, cx, buf, target)
+    }
+}
+
+impl<T: AsyncRead + Unpin> AsyncRead for TrojanUdpStream<T> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        unimplemented!()
+    }
+}
+
+impl<T: AsyncWrite + Unpin> AsyncWrite for TrojanUdpStream<T> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        _cx: &mut Context<'_>,
+        _buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        unimplemented!()
+    }
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.priv_poll_flush(cx)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        self.priv_poll_shutdown(cx)
+    }
+}
+
+impl<T: ProxyUdpStream> ProxyUdpStream for TrojanUdpStream<T> {
+    fn is_tokio_socket(&self) -> bool {
+        false
+    }
+}
+
+struct TrojanUdpReader {
+    read_state: u32,
+    addr: Address,
+    buffer: BytesMut, // atyp + len domain + domain name + port + len(2) + 0D0A  <=259+2+2
+    minimal_data_to_put: usize,
+    read_res: Poll<io::Result<()>>, // for state machine generator
+    data_length: usize,
+    read_zero: bool,
+}
+
+impl TrojanUdpReader {
+    fn new() -> Self {
+        Self {
+            read_state: 0,
+            addr: Default::default(),
+            buffer: BytesMut::with_capacity(1024),
+            minimal_data_to_put: 0,
+            read_res: Poll::Pending,
+            data_length: 0,
+            read_zero: false,
+        }
+    }
+
+    impl_read_utils!();
+
+    #[gentian]
+    #[gentian_attr(state=self.read_state,ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    fn priv_poll_read<R>(
+        &mut self,
+        r: &mut R,
+        cx: &mut Context<'_>,
+        dst: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>>
+    where
+        R: AsyncRead + Unpin,
+    {
+        loop {
+            loop {
+                self.read_res = (self.read_at_least(r, cx, 2)); //atyp and (domain name length) Ip first byte
+                if self.read_res.is_pending() {
+                    co_yield(Poll::Pending);
+                    continue;
+                }
+                if self.read_res.is_error() {
+                    if self.read_zero {
+                        return Poll::Ready(Ok(()));
+                    }
+                    return std::mem::replace(&mut self.read_res, Poll::Pending);
+                }
+                break;
+            }
+            self.data_length = match self.buffer[0] {
+                0x01 => 1 + 4 + 2 + 4,
+                0x4 => 1 + 16 + 2 + 4,
+                0x3 => 2 + self.buffer[1] as usize + 2 + 4,
+                _ => {
+                    return Err(std::io::Error::new(
+                        io::ErrorKind::Other,
+                        format!("not supported address type {:#x}", self.buffer[0]),
+                    ))
+                    .into();
+                }
+            };
+            self.read_reserve(self.data_length);
+            // 2. read data
+            loop {
+                self.read_res = (self.read_at_least(r, cx, self.data_length));
+                if self.read_res.is_pending() {
+                    co_yield(Poll::Pending);
+                    continue;
+                }
+                if self.read_res.is_error() {
+                    if self.read_zero {
+                        return Poll::Ready(Ok(()));
+                    }
+                    return std::mem::replace(&mut self.read_res, Poll::Pending);
+                }
+                break;
+            }
+            self.addr = Address::read_from_buf(&self.buffer)?;
+            self.buffer.advance(self.addr.serialized_len());
+            self.data_length = self.buffer.get_u16() as usize;
+            self.buffer.advance(2); // 0D0A (2bytes)
+            self.read_reserve(self.data_length);
+            loop {
+                self.read_res = (self.read_at_least(r, cx, self.data_length));
+                if self.read_res.is_pending() {
+                    co_yield(Poll::Pending);
+                    continue;
+                }
+                if self.read_res.is_error() {
+                    if self.read_zero {
+                        return Poll::Ready(Ok(()));
+                    }
+                    return std::mem::replace(&mut self.read_res, Poll::Pending);
+                }
+                break;
+            }
+            // 3. we have read adequate data
+            while self.calc_data_to_put(dst) != 0 {
+                dst.put_slice(&self.buffer.as_ref()[0..self.minimal_data_to_put]);
+                self.data_length -= self.minimal_data_to_put;
+                self.buffer.advance(self.minimal_data_to_put);
+                co_yield(Poll::Ready(Ok(())));
+            }
+        }
+    }
+
+    fn take_addr(&mut self) -> Address {
+        std::mem::take(&mut self.addr)
+    }
+}
+
+struct TrojanUdpWriter {
+    state: u32,
+    buffer: BytesMut, // atyp + len domain + domain name + port + len(2) + 0D0A  <=259+2+2
+    pos: usize,
+    data_len: usize,
+    write_res: Poll<io::Result<usize>>, // for state machine generator
+}
+
+impl TrojanUdpWriter {
+    fn new() -> Self {
+        Self {
+            state: 0,
+            buffer: BytesMut::with_capacity(259 + 2 + 2),
+            pos: 0,
+            data_len: 0,
+            write_res: Poll::Pending,
+        }
+    }
+
+    #[inline]
+    fn write_data<W>(
+        &mut self,
+        w: &mut W,
+        ctx: &mut Context<'_>,
+        buffer: &[u8],
+    ) -> Poll<io::Result<usize>>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        while self.pos < buffer.len() {
+            let n = ready!(Pin::new(&mut *w).poll_write(ctx, &buffer[self.pos..]))?;
+            self.pos += n;
+            if n == 0 {
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "write zero byte into writer",
+                )));
+            }
+        }
+        Poll::Ready(Ok(self.data_len))
+    }
+
+    #[inline]
+    fn write_buffer_data<W>(&mut self, w: &mut W, ctx: &mut Context<'_>) -> Poll<io::Result<usize>>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        while self.pos < self.buffer.len() {
+            let n = ready!(Pin::new(&mut *w).poll_write(ctx, &self.buffer[self.pos..]))?;
+            self.pos += n;
+            if n == 0 {
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::WriteZero,
+                    "write zero byte into writer",
+                )));
+            }
+        }
+        Poll::Ready(Ok(self.data_len))
+    }
+
+    #[gentian]
+    #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]
+    fn priv_poll_write<W>(
+        &mut self,
+        w: &mut W,
+        cx: &mut Context<'_>,
+        data: &[u8],
+        addr: &Address,
+    ) -> Poll<io::Result<usize>>
+    where
+        W: AsyncWrite + Unpin,
+    {
+        loop {
+            self.data_len = data.len();
+            if self.data_len == 0 {
+                return Poll::Ready(Ok(0));
+            }
+            addr.write_to_buf(&mut self.buffer);
+            self.buffer.put_u16(data.len() as u16);
+            self.buffer.put_slice(b"\r\n");
+            loop {
+                self.write_res = self.write_buffer_data(w, cx);
+                if self.write_res.is_ready() {
+                    break;
+                }
+                co_yield(Poll::Pending);
+            }
+            self.pos = 0;
+            self.buffer.clear();
+            loop {
+                self.write_res = self.write_data(w, cx, data);
+                if self.write_res.is_ready() {
+                    break;
+                }
+                co_yield(Poll::Pending);
+            }
+            self.pos = 0;
+            co_yield(std::mem::replace(&mut self.write_res, Poll::Pending));
+        }
     }
 }

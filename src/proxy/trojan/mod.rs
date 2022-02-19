@@ -6,6 +6,8 @@ use crate::proxy::{
 use async_trait::async_trait;
 use std::io;
 
+use self::trojan::TrojanUdpStream;
+
 mod trojan;
 
 const HEX_CHARS_LOWER: &[u8; 16] = b"0123456789abcdef";
@@ -37,7 +39,8 @@ impl ChainableStreamBuilder for TrojanStreamBuilder {
 
     async fn build_udp(&self, mut io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
         let header = RequestHeader::UdpAssociate(self.password);
-        header.write_to(&mut io).await.map(|_| io)
+        header.write_to(&mut io).await?;
+        Ok(Box::new(TrojanUdpStream::new(io)))
     }
 
     fn into_box(self) -> Box<dyn ChainableStreamBuilder> {

@@ -63,6 +63,7 @@ impl<S> VmessStream<S> {
         let x = random::<u8>() % 16;
         buf.put_u8((x << 4) | self.option.security_num);
         buf.put_u8(0);
+        debug_log!("vmess command udp detected");
         buf.put_u8(if self.option.is_udp {
             COMMAND_UDP
         } else {
@@ -148,7 +149,7 @@ impl<S> VmessStream<S> {
             }
             _ => {
                 // todo
-                unreachable!();
+                todo!();
             }
         }
         let mut v = VmessStream {

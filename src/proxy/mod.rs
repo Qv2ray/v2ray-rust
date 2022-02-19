@@ -120,7 +120,7 @@ impl UdpRead for TcpStream {
         _cx: &mut Context<'_>,
         _buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<Address>> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -131,7 +131,7 @@ impl UdpWrite for TcpStream {
         _buf: &[u8],
         _target: &Address,
     ) -> Poll<io::Result<usize>> {
-        todo!()
+        unimplemented!()
     }
 }
 
@@ -152,7 +152,6 @@ pub struct ChainStreamBuilder {
     builders: Vec<Box<dyn ChainableStreamBuilder>>,
     remote_addr: Option<Address>,
     last_builder: Option<Box<dyn ToChainableStreamBuilder>>,
-    // is the first non tls/direct/websocket protocol uot?
     is_uot: bool,
     is_full_cone: bool,
 }
@@ -229,6 +228,7 @@ impl ChainStreamBuilder {
         };
     }
 
+    // todo: chain check
     // if chain is uot, then before uot builder all builder must build tcp inside
     pub async fn build_udp(
         &self,

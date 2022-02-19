@@ -102,7 +102,6 @@ macro_rules! impl_flush_shutdown {
 /// ## struct must have members named as follows:
 /// * minimal_data_to_put: usize ( for calc_data_to_put ).
 /// * data_length: usize ( for calc_data_to_put ).
-/// * n: usize  ( for read_at_least).
 /// * buffer: BytesMut ( for read_at_least).
 /// * read_zero : bool ( for read_at_least).
 #[macro_export]
