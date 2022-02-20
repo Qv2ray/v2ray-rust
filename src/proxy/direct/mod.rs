@@ -12,7 +12,11 @@ impl ChainableStreamBuilder for DirectStreamBuilder {
         Ok(io)
     }
 
-    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+    async fn build_udp(
+        &self,
+        io: BoxProxyUdpStream,
+        _build_tcp_inside: bool,
+    ) -> io::Result<BoxProxyUdpStream> {
         Ok(io)
     }
 

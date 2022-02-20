@@ -49,7 +49,7 @@ mod tests {
         let ip3 = IpAddr::V4(Ipv4Addr::new(114, 114, 114, 114));
         let s = UdpSocket::bind(SocketAddr::new(ip, 0)).await?;
         println!("binding udp to {}", s.local_addr()?);
-        let s = ConnectedUdpSocket::connect(s, SocketAddr::new(ip, 19999)).await?;
+        let s = ConnectedUdpSocket::connect(s, SocketAddr::new(ip2, 53)).await?;
         let (mut r, mut w) = split_ext(s);
         let dns_req = b"\x12\x34\x01\x00\x00\x01\x00\x00\x00\x00\x00\x00\x05\x62\x61\x69\x64\x75\x03\x63\x6f\x6d\x00\x00\x01\x00\x01";
         let dns = Address::SocketAddress(SocketAddr::new(ip2, 53));
@@ -57,9 +57,11 @@ mod tests {
         let mut buf = BytesMut::with_capacity(1024);
         let (n1, addr) = r.recv_from(&mut buf).await?;
         println!("read size:{},addr:{}", n1, addr);
+        // Since this is a connected udp socket, send to another addr is ignored.
         let dns = Address::SocketAddress(SocketAddr::new(ip3, 53));
         w.send_to(dns_req, &dns).await.unwrap();
         let (n2, addr) = r.recv_from(&mut buf).await?;
+        assert_eq!(addr.get_sock_addr().ip(), ip2);
         println!("read size:{},addr:{}", n2, addr);
         println!("buf now len:{}", buf.len());
         assert_eq!(n1 + n2, buf.len());

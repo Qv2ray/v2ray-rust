@@ -6,19 +6,39 @@ An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 ## Config example
 
 ````toml
-default_outbound = "out2"
+default_outbound = "proxy"
 
 [[ss]]
 addr = "127.0.0.1:9000"
 password = "123456"
 method = "chacha20-poly1305"
-tag = "ss"
+tag = "ss0"
+[[ss]]
+addr = "127.0.0.1:9001"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss1"
+[[ss]]
+addr = "127.0.0.1:9002"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss2"
+[[ss]]
+addr = "127.0.0.1:9004"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss3"
 
 [[vmess]]
 addr = "127.0.0.1:10002"
 uuid = "b831381d-6324-4d53-ad4f-8cda48b30811"
 method = "aes-128-gcm"
 tag = "v"
+
+[[trojan]]
+addr = "127.0.0.1:10003"
+password = "password"
+tag = "t"
 
 [[ws]]
 uri = "ws://127.0.0.1:10002/"
@@ -28,14 +48,18 @@ tag = "w"
 tag = "d"
 
 [[outbounds]]
-chain = ["d"]
-# debug
-tag = "out"
+chain = ["ss0","ss1","ss2","ss3"]
+tag = "proxy"
 
 [[outbounds]]
-chain = ["w","v","ss"]
+chain = ["w","v","ss0","ss1"]
+# chain = ["w","v","ss2"]
+# chain = ["t","w","v"]
+# chain = ["ss0","ss1","ss2","ss3"]
+# chain = ["ss0","ss1","ss2","ss3","w","v"]
+# chain = ["ss0"]
 # debug
-tag = "out2"
+tag = "cn"
 
 [[outbounds]]
 chain = ["d"]
@@ -45,17 +69,17 @@ tag = "private"
 addr = "127.0.0.1:1087"
 enable_udp = true
 
-[[dokodemo]]
-addr = "127.0.0.1:12345"
-tproxy = true
+# [[dokodemo]]
+# addr = "127.0.0.1:12345"
+# tproxy = true
 
 [[geosite_rules]]
-tag = "out"
+tag = "cn"
 file_path = "/usr/share/v2ray/geosite.dat"
 rules = ["cn"]
 
 [[geoip_rules]]
-tag = "out"
+tag = "cn"
 file_path = "/usr/share/v2ray/geoip.dat"
 rules = ["cn"]
 
@@ -107,7 +131,7 @@ rules = ["private"]
 - ✅
 
 ### Chainable UDP
-- 🚧 
+- ✅
 
 ### Stream settings
 

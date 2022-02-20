@@ -18,6 +18,7 @@ use std::io::{Error, ErrorKind};
 
 use crate::common::random_iv_or_salt;
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
+use crate::proxy::{ProxyUdpStream, UdpRead, UdpWrite};
 use crate::{impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
@@ -183,3 +184,13 @@ where
     impl_flush_shutdown!();
 }
 impl_async_useful_traits!(CryptoStream);
+
+impl<S: ProxyUdpStream> UdpRead for CryptoStream<S> {}
+
+impl<S: ProxyUdpStream> UdpWrite for CryptoStream<S> {}
+
+impl<S: ProxyUdpStream> ProxyUdpStream for CryptoStream<S> {
+    fn is_tokio_socket(&self) -> bool {
+        false
+    }
+}

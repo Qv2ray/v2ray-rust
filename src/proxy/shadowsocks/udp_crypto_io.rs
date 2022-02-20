@@ -183,6 +183,7 @@ fn parse_packet(buf: &[u8]) -> io::Result<(usize, Address)> {
 
 pub struct ShadowSocksUdpStream<T> {
     stream: T,
+    addr: Address,
     context: SharedBloomContext,
     write_buffer: BytesMut,
     method: CipherKind,
@@ -192,9 +193,17 @@ pub struct ShadowSocksUdpStream<T> {
 }
 
 impl<T> ShadowSocksUdpStream<T> {
-    pub fn new(io: T, context: SharedBloomContext, method: CipherKind, key: Bytes) -> Self {
+    pub fn new(
+        io: T,
+        addr: Address,
+        context: SharedBloomContext,
+        method: CipherKind,
+        key: Bytes,
+    ) -> Self {
+        debug_log!("build ss udp stream, addr is:{}", addr);
         Self {
             stream: io,
+            addr,
             context,
             write_buffer: Default::default(),
             method,
@@ -212,11 +221,10 @@ impl<T: UdpRead + Unpin> ShadowSocksUdpStream<T> {
         dst: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<Address>> {
         let r = Pin::new(&mut this.stream);
-        let addr = ready!(r.poll_recv_from(cx, dst))?;
-        debug_log!("recv from addr:{}, len:{}", addr, dst.filled().len());
+        let _ = ready!(r.poll_recv_from(cx, dst))?;
         let (n, addr) = decrypt_payload(this.method, &this.key, dst.filled_mut())?;
-        debug_log!("after decrypted len:{}", n);
         dst.set_filled(n);
+        debug_log!("recv from addr:{}, len:{}", addr, dst.filled().len());
         Ok(addr).into()
     }
 }
@@ -301,9 +309,10 @@ impl<T: UdpWrite + Unpin> ShadowSocksUdpStream<T> {
                 data.len(),
                 addr
             );
+            debug_log!("poll sendto {}, before addr:{}", self.addr, addr);
             loop {
                 self.write_res =
-                    Pin::new(&mut self.stream).poll_send_to(cx, &self.write_buffer, addr);
+                    Pin::new(&mut self.stream).poll_send_to(cx, &self.write_buffer, &self.addr);
                 if self.write_res.is_ready() {
                     break;
                 }

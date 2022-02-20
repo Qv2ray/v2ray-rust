@@ -456,6 +456,7 @@ impl Config {
                     }
                 }
             }
+            builder.build_udp_marker();
             inner_map.insert(out.tag.clone(), builder);
         }
         Ok(inner_map)

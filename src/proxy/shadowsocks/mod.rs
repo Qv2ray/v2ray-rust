@@ -30,7 +30,7 @@ fn ss_hkdf_sha1(iv_or_salt: &[u8], key: &[u8]) -> [u8; 64] {
 
 #[derive(Clone)]
 pub struct ShadowsocksBuilder {
-    addr: Address,
+    addr: Address, // proxy_addr
     method: CipherKind,
     context: SharedBloomContext,
     key: Bytes,
@@ -73,9 +73,27 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
         }
     }
 
-    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+    async fn build_udp(
+        &self,
+        io: BoxProxyUdpStream,
+        build_tcp_inside: bool,
+    ) -> io::Result<BoxProxyUdpStream> {
+        if build_tcp_inside {
+            let mut stream = Box::new(CryptoStream::new(
+                self.context.clone(),
+                io,
+                self.key.clone(),
+                self.method,
+            ));
+            let res = self.addr.write_to_stream(&mut stream).await;
+            return match res {
+                Ok(_) => Ok(stream),
+                Err(e) => Err(e),
+            };
+        }
         Ok(Box::new(ShadowSocksUdpStream::new(
             io,
+            self.addr.clone(),
             self.context.clone(),
             self.method,
             self.key.clone(),
@@ -92,5 +110,9 @@ impl ChainableStreamBuilder for ShadowsocksBuilder {
 
     fn protocol_type(&self) -> ProtocolType {
         ProtocolType::SS
+    }
+
+    fn get_addr(&self) -> Option<Address> {
+        Some(self.addr.clone())
     }
 }

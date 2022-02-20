@@ -37,7 +37,15 @@ impl ChainableStreamBuilder for TrojanStreamBuilder {
         header.write_to(&mut io).await.map(|_| io)
     }
 
-    async fn build_udp(&self, mut io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+    async fn build_udp(
+        &self,
+        mut io: BoxProxyUdpStream,
+        build_tcp_inside: bool,
+    ) -> io::Result<BoxProxyUdpStream> {
+        if build_tcp_inside {
+            let header = RequestHeader::TcpConnect(self.password, self.addr.clone());
+            return header.write_to(&mut io).await.map(|_| io);
+        }
         let header = RequestHeader::UdpAssociate(self.password);
         header.write_to(&mut io).await?;
         Ok(Box::new(TrojanUdpStream::new(io)))
@@ -53,5 +61,9 @@ impl ChainableStreamBuilder for TrojanStreamBuilder {
 
     fn protocol_type(&self) -> ProtocolType {
         ProtocolType::TROJAN
+    }
+
+    fn get_addr(&self) -> Option<Address> {
+        Some(self.addr.clone())
     }
 }

@@ -27,6 +27,7 @@ pub struct VmessAeadWriter {
     write_res: Poll<io::Result<usize>>,
 }
 pub enum VmessSecurity {
+    #[allow(dead_code)] // todo: vmess chunk stream
     None,
     Aes128Gcm(Aes128Gcm),
     ChaCha20Poly1305(ChaCha20Poly1305),

@@ -1,13 +1,16 @@
 use crate::common::new_error;
 use crate::debug_log;
-use crate::proxy::{BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType};
+use crate::proxy::{
+    BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxyUdpStream,
+    UdpRead, UdpWrite,
+};
 use async_trait::async_trait;
 
 use boring::ssl::SslMethod;
 use boring::ssl::{SslConnector, SslFiletype};
 use std::io;
 
-use tokio_boring::connect;
+use tokio_boring::{connect, SslStream};
 
 #[derive(Clone)]
 pub struct TlsStreamBuilder {
@@ -42,6 +45,16 @@ impl TlsStreamBuilder {
     }
 }
 
+impl<S: ProxyUdpStream> UdpRead for SslStream<S> {}
+
+impl<S: ProxyUdpStream> UdpWrite for SslStream<S> {}
+
+impl<S: ProxyUdpStream> ProxyUdpStream for tokio_boring::SslStream<S> {
+    fn is_tokio_socket(&self) -> bool {
+        false
+    }
+}
+
 #[async_trait]
 impl ChainableStreamBuilder for TlsStreamBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
@@ -57,7 +70,23 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
         }
     }
 
-    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+    async fn build_udp(
+        &self,
+        io: BoxProxyUdpStream,
+        build_tcp_inside: bool,
+    ) -> io::Result<BoxProxyUdpStream> {
+        if build_tcp_inside {
+            let configuration = self.connector.configure().unwrap();
+            let stream = connect(configuration, self.sni.as_str(), io).await;
+            return match stream {
+                Ok(stream) => Ok(Box::new(stream)),
+                Err(e) => {
+                    let res = e.to_string();
+                    debug_log!("tls connect failed:{}", res);
+                    Err(new_error(res))
+                }
+            };
+        }
         Ok(io)
     }
 

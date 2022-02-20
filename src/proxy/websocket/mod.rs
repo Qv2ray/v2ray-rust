@@ -8,6 +8,7 @@ use crate::common::new_error;
 use crate::debug_log;
 use crate::proxy::{
     BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxySteam,
+    ProxyUdpStream, UdpRead, UdpWrite,
 };
 use futures_util::ready;
 use futures_util::sink::Sink;
@@ -112,6 +113,16 @@ impl<T: ProxySteam> AsyncWrite for BinaryWsStream<T> {
     }
 }
 
+impl<T: ProxyUdpStream> UdpRead for BinaryWsStream<T> {}
+
+impl<T: ProxyUdpStream> UdpWrite for BinaryWsStream<T> {}
+
+impl<T: ProxyUdpStream> ProxyUdpStream for BinaryWsStream<T> {
+    fn is_tokio_socket(&self) -> bool {
+        false
+    }
+}
+
 impl<T: ProxySteam> BinaryWsStream<T> {
     pub fn new(inner: WebSocketStream<T>) -> Self {
         return Self {
@@ -168,7 +179,22 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
         Ok(Box::new(BinaryWsStream::new(stream)))
     }
 
-    async fn build_udp(&self, io: BoxProxyUdpStream) -> io::Result<BoxProxyUdpStream> {
+    async fn build_udp(
+        &self,
+        io: BoxProxyUdpStream,
+        build_tcp_inside: bool,
+    ) -> io::Result<BoxProxyUdpStream> {
+        if build_tcp_inside {
+            let req = BinaryWsStreamBuilder::req(self.uri.clone(), &self.headers);
+            let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
+                .await
+                .map_err(|e| new_error(e))?;
+            if resp.status() != StatusCode::SWITCHING_PROTOCOLS {
+                return Err(new_error(format!("bad status: {}", resp.status())));
+            }
+            debug_log!("build ws stream success");
+            return Ok(Box::new(BinaryWsStream::new(stream)));
+        }
         Ok(io)
     }
 

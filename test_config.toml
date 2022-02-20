@@ -3,9 +3,23 @@ default_outbound = "cn"
 [[ss]]
 addr = "127.0.0.1:9000"
 password = "123456"
-# method = "chacha20-poly1305"
-method = "none"
-tag = "ss"
+method = "chacha20-poly1305"
+tag = "ss0"
+[[ss]]
+addr = "127.0.0.1:9001"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss1"
+[[ss]]
+addr = "127.0.0.1:9002"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss2"
+[[ss]]
+addr = "127.0.0.1:9004"
+password = "123456"
+method = "chacha20-poly1305"
+tag = "ss3"
 
 [[vmess]]
 addr = "127.0.0.1:10002"
@@ -14,7 +28,7 @@ method = "aes-128-gcm"
 tag = "v"
 
 [[trojan]]
-addr = "127.0.0.1:10002"
+addr = "127.0.0.1:10003"
 password = "password"
 tag = "t"
 
@@ -26,7 +40,12 @@ tag = "w"
 tag = "d"
 
 [[outbounds]]
-chain = ["ss"]
+chain = ["w","v","ss0","ss1"]
+# chain = ["w","v","ss2"]
+# chain = ["t","w","v"]
+# chain = ["ss0","ss1","ss2","ss3"]
+# chain = ["ss0","ss1","ss2","ss3","w","v"]
+# chain = ["ss0"]
 # debug
 tag = "cn"
 
