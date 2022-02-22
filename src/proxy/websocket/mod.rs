@@ -1,3 +1,5 @@
+mod ws_early_data;
+
 use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -6,6 +8,7 @@ use tokio_tungstenite::{client_async_with_config, tungstenite::Message, WebSocke
 
 use crate::common::new_error;
 use crate::debug_log;
+use crate::proxy::websocket::ws_early_data::BinaryWsStreamWithEarlyData;
 use crate::proxy::{
     BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxySteam,
     ProxyUdpStream, UdpRead, UdpWrite,
@@ -137,11 +140,15 @@ pub struct BinaryWsStreamBuilder {
     uri: Uri,
     headers: Vec<(String, String)>,
     ws_config: Option<WebSocketConfig>,
+    max_early_data: usize,
+    early_data_header_name: String,
 }
 
 impl BinaryWsStreamBuilder {
     pub fn new_from_config(
         uri: Uri,
+        max_early_data: usize,
+        early_data_header_name: String,
         ws_config: Option<WebSocketConfig>,
         headers: Vec<(String, String)>,
     ) -> BinaryWsStreamBuilder {
@@ -149,17 +156,23 @@ impl BinaryWsStreamBuilder {
             uri,
             headers,
             ws_config,
+            max_early_data,
+            early_data_header_name,
         }
     }
 
-    fn req(uri: Uri, headers: &Vec<(String, String)>) -> Request<()> {
+    fn req(&self) -> Request<()> {
         let mut request = Request::builder()
             //.method("GET")
-            .uri(uri);
-        for (k, v) in headers {
+            .uri(self.uri.clone());
+        for (k, v) in self.headers.iter() {
             if k != "Host" {
                 request = request.header(k.as_str(), v.as_str());
             }
+        }
+        if self.max_early_data > 0 {
+            // we will replace this field later
+            request = request.header(self.early_data_header_name.as_str(), "s");
         }
         request.body(()).unwrap()
     }
@@ -168,7 +181,17 @@ impl BinaryWsStreamBuilder {
 #[async_trait]
 impl ChainableStreamBuilder for BinaryWsStreamBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        let req = BinaryWsStreamBuilder::req(self.uri.clone(), &self.headers);
+        let req = self.req();
+        if self.max_early_data > 0 {
+            debug_log!("build tcp ws-0-rtt");
+            return Ok(Box::new(BinaryWsStreamWithEarlyData::new(
+                io,
+                req,
+                self.ws_config.clone(),
+                self.early_data_header_name.clone(),
+                self.max_early_data,
+            )));
+        }
         let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
             .await
             .map_err(|e| new_error(e))?;
@@ -185,7 +208,18 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
         build_tcp_inside: bool,
     ) -> io::Result<BoxProxyUdpStream> {
         if build_tcp_inside {
-            let req = BinaryWsStreamBuilder::req(self.uri.clone(), &self.headers);
+            let req = self.req();
+            if self.max_early_data > 0 {
+                debug_log!("build tcp ws-0-rtt");
+                let io = Box::new(BinaryWsStreamWithEarlyData::new(
+                    Box::new(io),
+                    req,
+                    self.ws_config.clone(),
+                    self.early_data_header_name.clone(),
+                    self.max_early_data,
+                ));
+                return Ok(io);
+            }
             let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
                 .await
                 .map_err(|e| new_error(e))?;

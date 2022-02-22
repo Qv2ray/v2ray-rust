@@ -150,6 +150,7 @@ rules = ["private"]
 - ✅ TLS
 - 🚧 HTTP/2
 - ✅ WebSocket
+- ✅ WebSocket-0-rtt
 - ❌ QUIC
 - ❌ DomainSocket
 - ❌ mKCP

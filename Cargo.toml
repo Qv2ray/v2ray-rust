@@ -13,7 +13,7 @@ strict-vmess-udp = []
 tokio-util = {version="0.7.0",features=["codec","net"]}
 async-trait = "0.1"
 bitvec = "1"
-
+base64 = "0.13.0"
 # actix = "0.10.0"
 # snmalloc-rs = "0.2.28"
 tokio-tungstenite = {version="*",features=["stream"],default-features = false}

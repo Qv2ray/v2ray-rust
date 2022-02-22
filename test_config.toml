@@ -33,14 +33,14 @@ password = "password"
 tag = "t"
 
 [[ws]]
-uri = "ws://127.0.0.1:10002/"
+uri = "ws://127.0.0.1:10002/?ed=2048"
 tag = "w"
 
 [[direct]]
 tag = "d"
 
 [[outbounds]]
-chain = ["w","v","ss0","ss1"]
+chain = ["w","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]
 # chain = ["ss0","ss1","ss2","ss3"]

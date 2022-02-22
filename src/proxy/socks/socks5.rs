@@ -260,7 +260,7 @@ impl Socks5UdpDatagram {
                     set_local_addr = true;
                 }
                 let ob = router.match_addr(&target_addr);
-                debug!("routing {} to outbound:{}", &target_addr, ob);
+                log::info!("routing {} to outbound:{}", &target_addr, ob);
                 if let Some(tx) = nat.get_mut_sender(ob) {
                     let _ = tx.send((target_addr, buf));
                 } else {

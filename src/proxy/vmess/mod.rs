@@ -1,3 +1,4 @@
+use crate::debug_log;
 use crate::proxy::vmess::vmess::VmessStream;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::{
@@ -21,6 +22,7 @@ pub struct VmessBuilder {
 #[async_trait]
 impl ChainableStreamBuilder for VmessBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
+        debug_log!("build vmess tcp");
         let opt = self.vmess_option.clone();
         Ok(Box::new(VmessStream::new(opt, io)))
     }

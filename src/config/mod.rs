@@ -9,7 +9,7 @@ use crate::common::net::copy_with_capacity_and_counter;
 use crate::common::{new_error, LW_BUFFER_SIZE};
 use crate::config::deserialize::{
     from_str_to_address, from_str_to_cipher_kind, from_str_to_option_address,
-    from_str_to_security_num, from_str_to_sni, from_str_to_uri, from_str_to_uuid,
+    from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
@@ -30,7 +30,6 @@ use serde::Deserialize;
 use std::net::{SocketAddr, TcpListener as StdTcpListener};
 
 use crate::config::route::RouterBuilder;
-use crate::debug_log;
 use crate::proxy::direct::DirectStreamBuilder;
 use domain_matcher::MatchType;
 use log::{debug, info};
@@ -42,7 +41,7 @@ use std::os::raw::c_int;
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpStream;
-use tokio_tungstenite::tungstenite::http::Uri;
+
 use uuid::Uuid;
 lazy_static! {
     static ref SS_LOCAL_SHARED_CONTEXT: SharedBloomContext = Arc::new(BloomContext::new(true));
@@ -175,8 +174,12 @@ impl ToChainableStreamBuilder for TlsConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct WebsocketConfig {
-    #[serde(deserialize_with = "from_str_to_uri")]
-    uri: Uri,
+    #[serde(deserialize_with = "from_str_to_ws_uri")]
+    uri: EarlyDataUri,
+    #[serde(default)]
+    early_data_header_name: String,
+    #[serde(default)]
+    max_early_data: usize,
     #[serde(default)]
     headers: Vec<(String, String)>,
     tag: String,
@@ -187,11 +190,32 @@ impl ToChainableStreamBuilder for WebsocketConfig {
         &self,
         _addr: Option<Address>,
     ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(BinaryWsStreamBuilder::new_from_config(
-            self.uri.clone(),
-            None,
-            self.headers.clone(),
-        ))
+        // we use early data config in uri query.
+        if self.uri.max_early_data > 0 {
+            Box::new(BinaryWsStreamBuilder::new_from_config(
+                self.uri.uri.clone(),
+                self.uri.max_early_data,
+                self.uri.early_data_header_name.clone(),
+                None,
+                self.headers.clone(),
+            ))
+        } else if self.max_early_data > 0 && !self.early_data_header_name.is_empty() {
+            Box::new(BinaryWsStreamBuilder::new_from_config(
+                self.uri.uri.clone(),
+                self.max_early_data,
+                self.early_data_header_name.clone(),
+                None,
+                self.headers.clone(),
+            ))
+        } else {
+            Box::new(BinaryWsStreamBuilder::new_from_config(
+                self.uri.uri.clone(),
+                0,
+                String::new(),
+                None,
+                self.headers.clone(),
+            ))
+        }
     }
     fn tag(&self) -> &str {
         self.tag.as_str()
@@ -511,7 +535,7 @@ impl ConfigServerBuilder {
             actix_rt::System::new().block_on(async move {
                 let mut server = Server::build();
                 server = server.backlog(self.backlog);
-                debug_log!("backlog is:{}", self.backlog);
+                info!("backlog is:{}", self.backlog);
                 for door in self.dokodemo.iter_mut() {
                     let inner_map = inner_map.clone();
                     let router = router.clone();
@@ -599,7 +623,7 @@ impl ConfigServerBuilder {
                                 let stream_builder;
                                 {
                                     let ob = router.match_addr(&x.1);
-                                    debug!("routing {} to outbound:{}", x.1, ob);
+                                    info!("routing {} to outbound:{}", x.1, ob);
                                     stream_builder = inner_map.get(ob).unwrap();
                                 }
                                 let out_stream = stream_builder.build_tcp(x.1).await?;
