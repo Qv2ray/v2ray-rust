@@ -275,6 +275,7 @@ impl Socks5UdpDatagram {
                         // todo: set a reasonable buffer size
                         let mut buf = BytesMut::with_capacity(HW_BUFFER_SIZE);
                         loop {
+                            #[allow(unused_variables)]
                             let (n, addr) = out_stream_r.recv_from(&mut buf).await?;
                             debug_log!("read from remote addr:{}, recv len:{}", addr, n);
                             let _ = tx_remote_packet.send((buf.clone(), addr)).await;

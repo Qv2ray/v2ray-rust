@@ -16,6 +16,8 @@ use tokio_boring::{connect, SslStream};
 pub struct TlsStreamBuilder {
     connector: SslConnector,
     sni: String,
+    verify_hostname: bool,
+    verify_sni: bool,
 }
 
 impl TlsStreamBuilder {
@@ -23,6 +25,8 @@ impl TlsStreamBuilder {
         sni: String,
         cert_file: &Option<String>,
         key_file: &Option<String>,
+        verify_hostname: bool,
+        verify_sni: bool,
     ) -> Self {
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
         if let Some(cert_file) = cert_file {
@@ -41,6 +45,8 @@ impl TlsStreamBuilder {
         Self {
             connector: configuration.build(),
             sni,
+            verify_hostname,
+            verify_sni,
         }
     }
 }
@@ -55,19 +61,27 @@ impl<S: ProxyUdpStream> ProxyUdpStream for tokio_boring::SslStream<S> {
     }
 }
 
-#[async_trait]
-impl ChainableStreamBuilder for TlsStreamBuilder {
-    async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
-        let configuration = self.connector.configure().unwrap();
-        let stream = connect(configuration, self.sni.as_str(), io).await;
-        match stream {
+macro_rules! build_tcp_impl {
+    ($name:tt,$io:tt) => {
+        let mut configuration = $name.connector.configure().unwrap();
+        configuration.set_use_server_name_indication($name.verify_sni);
+        configuration.set_verify_hostname($name.verify_hostname);
+        let stream = connect(configuration, $name.sni.as_str(), $io).await;
+        return match stream {
             Ok(stream) => Ok(Box::new(stream)),
             Err(e) => {
                 let res = e.to_string();
                 debug_log!("tls connect failed:{}", res);
                 Err(new_error(res))
             }
-        }
+        };
+    };
+}
+
+#[async_trait]
+impl ChainableStreamBuilder for TlsStreamBuilder {
+    async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
+        build_tcp_impl!(self, io);
     }
 
     async fn build_udp(
@@ -76,16 +90,7 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
         build_tcp_inside: bool,
     ) -> io::Result<BoxProxyUdpStream> {
         if build_tcp_inside {
-            let configuration = self.connector.configure().unwrap();
-            let stream = connect(configuration, self.sni.as_str(), io).await;
-            return match stream {
-                Ok(stream) => Ok(Box::new(stream)),
-                Err(e) => {
-                    let res = e.to_string();
-                    debug_log!("tls connect failed:{}", res);
-                    Err(new_error(res))
-                }
-            };
+            build_tcp_impl!(self, io);
         }
         Ok(io)
     }
@@ -125,6 +130,8 @@ mod tests {
         Ok(TlsStreamBuilder {
             connector: configuration.build(),
             sni: dns_name.to_string(),
+            verify_hostname: true,
+            verify_sni: true,
         })
     }
 

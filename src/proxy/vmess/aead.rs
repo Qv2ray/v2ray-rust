@@ -1,6 +1,7 @@
 use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::net::PollUtil;
 use crate::common::LW_BUFFER_SIZE;
+#[allow(unused_imports)]
 use crate::proxy::show_utf8_lossy;
 use crate::proxy::vmess::vmess::{CHUNK_SIZE, MAX_SIZE};
 use crate::{debug_log, impl_read_utils};

@@ -141,6 +141,10 @@ pub struct TlsConfig {
     sni: String,
     cert_file: Option<String>,
     key_file: Option<String>,
+    #[serde(default = "default_true")]
+    verify_hostname: bool,
+    #[serde(default = "default_true")]
+    verify_sni: bool,
     tag: String,
 }
 
@@ -153,6 +157,8 @@ impl ToChainableStreamBuilder for TlsConfig {
             self.sni.clone(),
             &self.cert_file,
             &self.key_file,
+            self.verify_hostname,
+            self.verify_sni,
         ))
     }
     fn tag(&self) -> &str {
@@ -304,6 +310,9 @@ pub struct DomainRoutingRules {
 
 fn default_backlog() -> u32 {
     4096
+}
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Deserialize)]
