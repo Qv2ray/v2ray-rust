@@ -3,6 +3,18 @@
 
 An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 
+
+## Features
+
+* Proxy chains
+* Full Cone UDP for Shadowsocks/Trojan/Direct
+* Fast route algorithm
+  * Hybrid/Mph Domain matcher
+  * Longest prefix match for CIDR route
+* ClientHello fingerprinting resistance
+* Easy configuration
+
+
 ## Config example
 
 ````toml
