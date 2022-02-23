@@ -1,8 +1,16 @@
 extern crate protoc_rust;
 
 use protoc_rust::Customize;
+use std::path::Path;
 
 fn main() {
+    //println!("cargo:rerun-if-changed=src/config/geosite.rs");
+    //println!("cargo:rerun-if-changed=src/config/geoip.rs");
+    let p1 = Path::new("src/config/geoip.rs");
+    let p2 = Path::new("src/config/geosite.rs");
+    if p1.exists() && p2.exists() {
+        return;
+    }
     protoc_rust::Codegen::new()
         .out_dir("src/")
         .customize(Customize {

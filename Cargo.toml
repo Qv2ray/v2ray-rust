@@ -3,6 +3,7 @@ name = "v2ray-rust"
 version = "0.1.0"
 authors = ["darsvador"]
 edition = "2021"
+exclude = ["./test_config.toml"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
