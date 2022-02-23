@@ -18,6 +18,7 @@ use tokio::net::{TcpStream, UdpSocket};
 mod address;
 pub mod direct;
 pub mod dokodemo_door;
+pub mod h2;
 pub mod shadowsocks;
 pub mod socks;
 pub mod tls;
@@ -63,17 +64,14 @@ pub enum ProtocolType {
     WS,
     TROJAN,
     DIRECT,
+    H2,
 }
 
 impl ProtocolType {
     pub fn is_uot(&self) -> bool {
         match self {
-            ProtocolType::SS => false,
-            ProtocolType::TLS => false,
-            ProtocolType::VMESS => true,
-            ProtocolType::WS => false,
-            ProtocolType::TROJAN => true,
-            ProtocolType::DIRECT => false,
+            ProtocolType::VMESS | ProtocolType::TROJAN => true,
+            _ => false,
         }
     }
 }
@@ -272,7 +270,7 @@ impl ChainStreamBuilder {
             outer_stream = b.build_udp(outer_stream, *build_tcp_inside).await?;
         }
         if let Some(b) = &self.last_builder {
-            if b.protocol_type().is_uot() {
+            if b.get_protocol_type().is_uot() {
                 outer_stream = b
                     .to_chainable_stream_builder(Some(proxy_addr))
                     .build_udp(outer_stream, *self.build_udp_marker.last().unwrap())

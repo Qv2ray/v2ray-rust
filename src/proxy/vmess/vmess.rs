@@ -295,7 +295,6 @@ impl<S: AsyncWrite + AsyncRead + Send + Unpin> UdpWrite for VmessStream<S> {
         #[cfg(feature = "strict-vmess-udp")]
         {
             use crate::common::new_error;
-            debug_log!("wwwwwwwwwwwwwwwwwww");
             if self.option.addr != *target {
                 return Err(new_error(
                     "Vmess can't change target udp address different from first packet. Try using a full-cone protocol instead.",

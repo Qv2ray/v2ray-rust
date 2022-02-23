@@ -39,8 +39,14 @@ tag = "w"
 [[direct]]
 tag = "d"
 
+[[h2]]
+tag = "h2"
+hosts = ["example.org"]
+path = "/test"
+
 [[outbounds]]
-chain = ["w","v"]
+#chain = ["w","v"]
+chain = ["h2","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]
 # chain = ["ss0","ss1","ss2","ss3"]

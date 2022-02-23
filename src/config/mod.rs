@@ -8,8 +8,9 @@ pub use crate::config::route::Router;
 use crate::common::net::copy_with_capacity_and_counter;
 use crate::common::{new_error, LW_BUFFER_SIZE};
 use crate::config::deserialize::{
-    from_str_to_address, from_str_to_cipher_kind, from_str_to_option_address,
-    from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
+    from_str_to_address, from_str_to_cipher_kind, from_str_to_http_method,
+    from_str_to_option_address, from_str_to_path, from_str_to_security_num, from_str_to_sni,
+    from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
@@ -52,7 +53,10 @@ pub trait ToChainableStreamBuilder: Sync + Send {
         -> Box<dyn ChainableStreamBuilder>;
     fn tag(&self) -> &str;
     fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder>;
-    fn protocol_type(&self) -> ProtocolType;
+    fn get_protocol_type(&self) -> ProtocolType;
+    fn get_addr(&self) -> Option<Address> {
+        None
+    }
 }
 impl Clone for Box<dyn ToChainableStreamBuilder> {
     fn clone(&self) -> Self {
@@ -98,8 +102,12 @@ impl ToChainableStreamBuilder for VmessConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::VMESS
+    }
+
+    fn get_addr(&self) -> Option<Address> {
+        Some(self.addr.clone())
     }
 }
 
@@ -129,8 +137,12 @@ impl ToChainableStreamBuilder for TrojanConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::TROJAN
+    }
+
+    fn get_addr(&self) -> Option<Address> {
+        Some(self.addr.clone())
     }
 }
 
@@ -167,7 +179,7 @@ impl ToChainableStreamBuilder for TlsConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::TROJAN
     }
 }
@@ -224,7 +236,7 @@ impl ToChainableStreamBuilder for WebsocketConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::WS
     }
 }
@@ -259,7 +271,7 @@ impl ToChainableStreamBuilder for DirectConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::DIRECT
     }
 }
@@ -283,8 +295,12 @@ impl ToChainableStreamBuilder for ShadowsocksConfig {
         Box::new(self.clone())
     }
 
-    fn protocol_type(&self) -> ProtocolType {
+    fn get_protocol_type(&self) -> ProtocolType {
         ProtocolType::SS
+    }
+
+    fn get_addr(&self) -> Option<Address> {
+        Some(self.addr.clone())
     }
 }
 
@@ -349,6 +365,47 @@ pub struct DokodemoDoor {
     target_addr: Option<Address>,
 }
 
+#[inline]
+fn default_http2_method() -> http::Method {
+    http::Method::PUT
+}
+
+#[derive(Deserialize, Clone)]
+pub struct Http2Config {
+    tag: String,
+    pub(crate) hosts: Vec<String>,
+    #[serde(default)]
+    pub(crate) headers: Vec<(String, String)>,
+    #[serde(
+        default = "default_http2_method",
+        deserialize_with = "from_str_to_http_method"
+    )]
+    pub(crate) method: http::Method,
+    #[serde(deserialize_with = "from_str_to_path")]
+    pub(crate) path: http::uri::PathAndQuery,
+}
+
+impl ToChainableStreamBuilder for Http2Config {
+    fn to_chainable_stream_builder(
+        &self,
+        _addr: Option<Address>,
+    ) -> Box<dyn ChainableStreamBuilder> {
+        ChainableStreamBuilder::clone_box(self)
+    }
+
+    fn tag(&self) -> &str {
+        self.tag.as_str()
+    }
+
+    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
+        Box::new(self.clone())
+    }
+
+    fn get_protocol_type(&self) -> ProtocolType {
+        ProtocolType::H2
+    }
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     #[serde(default = "default_backlog")]
@@ -370,6 +427,8 @@ pub struct Config {
     #[serde(default)]
     domain_routing_rules: Vec<DomainRoutingRules>,
     #[serde(default)]
+    h2: Vec<Http2Config>,
+    #[serde(default)]
     geosite_rules: Vec<GeoSiteRules>,
     #[serde(default)]
     geoip_rules: Vec<GeoIpRules>,
@@ -380,10 +439,26 @@ pub struct Config {
     inbounds: Vec<Inbounds>,
 }
 
+impl std::ops::Index<(ProtocolType, usize)> for Config {
+    type Output = dyn ToChainableStreamBuilder;
+
+    fn index(&self, index: (ProtocolType, usize)) -> &Self::Output {
+        match index.0 {
+            ProtocolType::SS => &self.ss[index.1],
+            ProtocolType::TLS => &self.tls[index.1],
+            ProtocolType::VMESS => &self.vmess[index.1],
+            ProtocolType::WS => &self.ws[index.1],
+            ProtocolType::TROJAN => &self.trojan[index.1],
+            ProtocolType::DIRECT => &self.direct[index.1],
+            ProtocolType::H2 => &self.h2[index.1],
+        }
+    }
+}
+
 macro_rules! insert_config_map {
-    ($name:expr,$protocol_idx:tt,$map:tt) => {{
+    ($name:expr,$map:tt) => {{
         for (idx, s) in $name.iter().enumerate() {
-            $map.insert(s.tag.clone(), ($protocol_idx, idx));
+            $map.insert(s.tag.as_str(), (s.get_protocol_type(), idx));
         }
     }};
 }
@@ -396,99 +471,55 @@ impl Config {
         let config = toml::from_str(&config_string)?;
         Ok(config)
     }
-    fn build_inner_map(&self) -> io::Result<HashMap<String, ChainStreamBuilder>> {
+    fn build_inner_map<'a>(&'a self) -> io::Result<HashMap<String, ChainStreamBuilder>> {
         // tag->(protocol idx, idx of protocol vec)
-        let mut config_map: HashMap<String, (u8, usize)> = HashMap::new();
-        insert_config_map!(self.ss, 0u8, config_map);
-        insert_config_map!(self.tls, 1u8, config_map);
-        insert_config_map!(self.vmess, 2u8, config_map);
-        insert_config_map!(self.ws, 3u8, config_map);
-        insert_config_map!(self.trojan, 4u8, config_map);
-        insert_config_map!(self.direct, 5u8, config_map);
+        let mut config_map: HashMap<&'a str, (ProtocolType, usize)> = HashMap::new();
+        insert_config_map!(self.ss, config_map);
+        insert_config_map!(self.tls, config_map);
+        insert_config_map!(self.vmess, config_map);
+        insert_config_map!(self.ws, config_map);
+        insert_config_map!(self.trojan, config_map);
+        insert_config_map!(self.direct, config_map);
+        insert_config_map!(self.h2, config_map);
         let mut inner_map = HashMap::new();
         for out in self.outbounds.iter() {
             let mut addrs = Vec::new();
             let mut builder = ChainStreamBuilder::new();
             for tag in out.chain.iter() {
-                let protocol = config_map.get(tag);
-                if protocol.is_none() {
+                if let Some((p, idx)) = config_map.get(tag.as_str()) {
+                    if let Some(tmp_addr) = self[(*p, *idx)].get_addr() {
+                        if builder.remote_addr_is_none() {
+                            builder.push_remote_addr(tmp_addr);
+                            continue;
+                        }
+                        addrs.push(tmp_addr);
+                    }
+                } else {
                     return Err(new_error(format!(
-                        "config parse failed, can't find tag: {}",
-                        tag
+                        "config parse failed, can't find chain tag `{}` in outbound `{}`",
+                        tag, out.tag
                     )));
-                }
-                let protocol = protocol.unwrap();
-                match protocol.0 {
-                    0 => {
-                        let tmp_addr = self.ss[protocol.1].addr.clone();
-                        if builder.remote_addr_is_none() {
-                            builder.push_remote_addr(tmp_addr);
-                            continue;
-                        }
-                        addrs.push(tmp_addr);
-                    }
-                    2 => {
-                        let tmp_addr = self.vmess[protocol.1].addr.clone();
-                        if builder.remote_addr_is_none() {
-                            builder.push_remote_addr(tmp_addr);
-                            continue;
-                        }
-                        addrs.push(tmp_addr);
-                    }
-                    4 => {
-                        let tmp_addr = self.trojan[protocol.1].addr.clone();
-                        if builder.remote_addr_is_none() {
-                            builder.push_remote_addr(tmp_addr);
-                            continue;
-                        }
-                        addrs.push(tmp_addr);
-                    }
-                    _ => {}
                 }
             }
             let mut addr_iter = addrs.into_iter();
-            for tag in out.chain.iter() {
-                let protocol = config_map.get(tag).unwrap();
-                match protocol.0 {
-                    0 => {
-                        let next_addr = addr_iter.next();
-                        if next_addr.is_none() {
-                            builder.push_last_builder(Box::new(self.ss[protocol.1].clone()));
-                            continue;
+            out.chain.iter().for_each(|t| {
+                if let Some((p, idx)) = config_map.get(t.as_str()) {
+                    match *p {
+                        ProtocolType::TROJAN | ProtocolType::SS | ProtocolType::VMESS => {
+                            let next_addr = addr_iter.next();
+                            if next_addr.is_none() {
+                                builder.push_last_builder(self[(*p, *idx)].clone_box());
+                            } else {
+                                builder
+                                    .push(self[(*p, *idx)].to_chainable_stream_builder(next_addr));
+                            }
                         }
-                        builder.push(self.ss[protocol.1].to_chainable_stream_builder(next_addr));
-                    }
-                    1 => {
-                        builder.push(self.tls[protocol.1].to_chainable_stream_builder(None));
-                    }
-                    2 => {
-                        let next_addr = addr_iter.next();
-                        if next_addr.is_none() {
-                            builder.push_last_builder(Box::new(self.vmess[protocol.1].clone()));
-                            continue;
+                        _ => {
+                            builder.push(self[(*p, *idx)].to_chainable_stream_builder(None));
                         }
-                        builder.push(self.vmess[protocol.1].to_chainable_stream_builder(next_addr));
-                    }
-                    3 => {
-                        builder.push(self.ws[protocol.1].to_chainable_stream_builder(None));
-                    }
-                    4 => {
-                        let next_addr = addr_iter.next();
-                        if next_addr.is_none() {
-                            builder.push_last_builder(Box::new(self.trojan[protocol.1].clone()));
-                            continue;
-                        }
-                        builder
-                            .push(self.trojan[protocol.1].to_chainable_stream_builder(next_addr));
-                    }
-                    5 => {
-                        builder.push(self.direct[protocol.1].to_chainable_stream_builder(None));
-                    }
-                    _ => {
-                        unreachable!()
                     }
                 }
-            }
+            });
             builder.build_udp_marker();
             inner_map.insert(out.tag.clone(), builder);
         }

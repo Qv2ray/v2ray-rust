@@ -15,7 +15,7 @@ impl<'a> ChainStreamBuilderProtocolTypeIter<'a> {
     ) -> Self {
         let mut ty = None;
         if let Some(b) = last_builder {
-            ty = Some(b.protocol_type());
+            ty = Some(b.get_protocol_type());
         }
         Self {
             builders,

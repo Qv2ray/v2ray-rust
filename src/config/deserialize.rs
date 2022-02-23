@@ -1,6 +1,8 @@
 use crate::common::new_error;
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::{Address, AddressError};
+use http::uri::PathAndQuery;
+use http::Method;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use tokio_tungstenite::tungstenite::http::Uri;
@@ -161,6 +163,21 @@ impl EarlyDataUri {
             max_early_data: 0,
         })
     }
+}
+
+pub(super) fn from_str_to_path<'de, D>(deserializer: D) -> Result<PathAndQuery, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let path_and_query: &str = Deserialize::deserialize(deserializer)?;
+    path_and_query.try_into().map_err(D::Error::custom)
+}
+pub(super) fn from_str_to_http_method<'de, D>(deserializer: D) -> Result<Method, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let method: &str = Deserialize::deserialize(deserializer)?;
+    method.try_into().map_err(D::Error::custom)
 }
 
 pub(super) fn from_str_to_ws_uri<'de, D>(deserializer: D) -> Result<EarlyDataUri, D::Error>

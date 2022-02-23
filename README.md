@@ -148,7 +148,7 @@ rules = ["private"]
 ### Stream settings
 
 - ✅ TLS
-- 🚧 HTTP/2
+- ✅ HTTP/2
 - ✅ WebSocket
 - ✅ WebSocket-0-rtt
 - ❌ QUIC
