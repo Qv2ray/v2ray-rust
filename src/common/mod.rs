@@ -30,8 +30,8 @@ pub trait BlockCipherHelper {
 impl BlockCipherHelper for Aes128 {
     #[inline]
     fn new_with_slice(key: &[u8]) -> Self {
-        let key = GenericArray::from_slice(&key);
-        Aes128::new(&key)
+        let key = GenericArray::from_slice(key);
+        Aes128::new(key)
     }
 
     #[inline]

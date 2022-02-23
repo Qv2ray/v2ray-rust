@@ -189,7 +189,7 @@ impl ChainStreamBuilder {
         if let Some(idx) = iter.position(|a| a.is_uot()) {
             if idx == 0 {
                 // last builder is uot
-                return;
+                
             } else {
                 // the builders first uot protocol from right to left;
                 self.last_udp_addr = self.builders[self.builders.len() - idx].get_addr();
@@ -263,13 +263,11 @@ impl ChainStreamBuilder {
                 let socket = UdpSocket::bind(SocketAddr::new(udp_bind_ip, 0)).await?;
                 outer_stream = Box::new(remote_addr.connect_udp(socket).await?);
             }
+        } else if self.build_udp_marker[0] {
+            outer_stream = Box::new(proxy_addr.connect_tcp().await?);
         } else {
-            if self.build_udp_marker[0] {
-                outer_stream = Box::new(proxy_addr.connect_tcp().await?);
-            } else {
-                let socket = UdpSocket::bind(SocketAddr::new(udp_bind_ip, 0)).await?;
-                outer_stream = Box::new(proxy_addr.connect_udp(socket).await?);
-            }
+            let socket = UdpSocket::bind(SocketAddr::new(udp_bind_ip, 0)).await?;
+            outer_stream = Box::new(proxy_addr.connect_udp(socket).await?);
         }
         for (b, build_tcp_inside) in self.builders.iter().zip(self.build_udp_marker.iter()) {
             outer_stream = b.build_udp(outer_stream, *build_tcp_inside).await?;
@@ -331,7 +329,7 @@ mod tests {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     #[test]

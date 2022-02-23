@@ -72,7 +72,9 @@ impl<S> CryptoStream<S> {
         let iv = match method {
             CipherKind::None => Vec::new(),
             _ => {
-                let local_salt = loop {
+                
+                //trace!("generated AEAD cipher salt {:?}", ByteStr::new(&local_salt));
+                loop {
                     let mut salt = vec![0u8; prev_len];
                     if prev_len > 0 {
                         random_iv_or_salt(&mut salt);
@@ -83,9 +85,7 @@ impl<S> CryptoStream<S> {
                         continue;
                     }
                     break salt;
-                };
-                //trace!("generated AEAD cipher salt {:?}", ByteStr::new(&local_salt));
-                local_salt
+                }
             }
         };
 

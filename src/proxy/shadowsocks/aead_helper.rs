@@ -69,7 +69,7 @@ impl CipherInner {
         }
     }
     pub fn decrypt_slice(&self, nonce: &[u8], ciphertext_in_plaintext_out: &mut [u8]) -> bool {
-        return match self {
+        match self {
             CipherInner::Aes128Gcm(ref c) => {
                 c.decrypt_inplace_with_slice(nonce, b"", ciphertext_in_plaintext_out)
             }
@@ -79,7 +79,7 @@ impl CipherInner {
             CipherInner::ChaCha20Poly1305(ref c) => {
                 c.decrypt_inplace_with_slice(nonce, b"", ciphertext_in_plaintext_out)
             }
-        };
+        }
     }
 }
 

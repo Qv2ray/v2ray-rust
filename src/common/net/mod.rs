@@ -41,7 +41,7 @@ where
     unsafe {
         buf.advance_mut(n);
     }
-    return Poll::Ready(Ok(n));
+    Poll::Ready(Ok(n))
 }
 
 pub trait PollUtil {
@@ -79,10 +79,10 @@ impl<T: Default + Copy> PollUtil for Poll<io::Result<T>> {
     }
 
     fn get_poll_res(&self) -> Self::T {
-        return match self {
+        match self {
             Poll::Ready(Err(_)) => Self::T::default(),
             Poll::Ready(Ok(t)) => *t,
             Poll::Pending => Self::T::default(),
-        };
+        }
     }
 }

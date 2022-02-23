@@ -20,7 +20,7 @@ impl Hasher for Fnv1aHasher {
         let Fnv1aHasher(mut hash) = *self;
 
         for byte in bytes.iter() {
-            hash = hash ^ (*byte as u32);
+            hash ^= *byte as u32;
             hash = hash.wrapping_mul(0x01000193);
         }
 

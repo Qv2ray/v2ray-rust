@@ -35,7 +35,7 @@ pub(super) fn from_str_to_option_address<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    from_str_to_address(deserializer).map(|addr| Some(addr))
+    from_str_to_address(deserializer).map(Some)
 }
 
 pub(super) fn from_str_to_security_num<'de, D>(deserializer: D) -> Result<u8, D::Error>
@@ -155,11 +155,11 @@ impl EarlyDataUri {
                 });
             }
         }
-        return Ok(EarlyDataUri {
+        Ok(EarlyDataUri {
             uri: ws_uri,
             early_data_header_name: String::new(),
             max_early_data: 0,
-        });
+        })
     }
 }
 

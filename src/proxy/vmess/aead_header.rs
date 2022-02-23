@@ -77,7 +77,7 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8], data: &[u8]) -> BytesMut {
         let mbuf = &mut generated_auth_id.chunk_mut()[..2 + AES_128_GCM_TAG_LEN];
         let mbuf = unsafe { from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         generated_auth_id.put_u16(data.len() as u16);
-        cipher.encrypt_inplace_with_slice(&nonce, &generated_auth_id[..id_len], mbuf);
+        cipher.encrypt_inplace_with_slice(nonce, &generated_auth_id[..id_len], mbuf);
         unsafe { generated_auth_id.advance_mut(AES_128_GCM_TAG_LEN) };
     }
     generated_auth_id.put_slice(&connection_nonce);
@@ -99,7 +99,7 @@ pub fn seal_vmess_aead_header(cmd_key: &[u8], data: &[u8]) -> BytesMut {
         let mbuf = &mut generated_auth_id.chunk_mut()[..data.len() + AES_128_GCM_TAG_LEN];
         let mbuf = unsafe { from_raw_parts_mut(mbuf.as_mut_ptr(), mbuf.len()) };
         generated_auth_id.put_slice(data);
-        cipher.encrypt_inplace_with_slice(&nonce, &generated_auth_id[..id_len], mbuf);
+        cipher.encrypt_inplace_with_slice(nonce, &generated_auth_id[..id_len], mbuf);
         unsafe { generated_auth_id.advance_mut(AES_128_GCM_TAG_LEN) };
     }
     generated_auth_id

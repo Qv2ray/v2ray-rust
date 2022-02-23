@@ -109,7 +109,7 @@ impl UdpRead for ConnectedUdpSocket {
         let this = self.get_mut();
         this.0
             .poll_recv_from(cx, buf)
-            .map_ok(|a| Address::SocketAddress(a))
+            .map_ok(Address::SocketAddress)
     }
 }
 

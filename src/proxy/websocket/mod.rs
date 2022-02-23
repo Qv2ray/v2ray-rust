@@ -51,7 +51,7 @@ impl<T: ProxySteam> AsyncRead for BinaryWsStream<T> {
             if message.is_none() {
                 return Poll::Ready(Err(new_error("websocket stream drained")));
             }
-            let message = message.unwrap().map_err(|e| new_error(e))?;
+            let message = message.unwrap().map_err(new_error)?;
             // binary only
             match message {
                 Message::Binary(binary) => {
@@ -128,10 +128,10 @@ impl<T: ProxyUdpStream> ProxyUdpStream for BinaryWsStream<T> {
 
 impl<T: ProxySteam> BinaryWsStream<T> {
     pub fn new(inner: WebSocketStream<T>) -> Self {
-        return Self {
+        Self {
             inner,
             read_buffer: None,
-        };
+        }
     }
 }
 
@@ -187,14 +187,14 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
             return Ok(Box::new(BinaryWsStreamWithEarlyData::new(
                 io,
                 req,
-                self.ws_config.clone(),
+                self.ws_config,
                 self.early_data_header_name.clone(),
                 self.max_early_data,
             )));
         }
-        let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
+        let (stream, resp) = client_async_with_config(req, io, self.ws_config)
             .await
-            .map_err(|e| new_error(e))?;
+            .map_err(new_error)?;
         if resp.status() != StatusCode::SWITCHING_PROTOCOLS {
             return Err(new_error(format!("bad status: {}", resp.status())));
         }
@@ -214,15 +214,15 @@ impl ChainableStreamBuilder for BinaryWsStreamBuilder {
                 let io = Box::new(BinaryWsStreamWithEarlyData::new(
                     Box::new(io),
                     req,
-                    self.ws_config.clone(),
+                    self.ws_config,
                     self.early_data_header_name.clone(),
                     self.max_early_data,
                 ));
                 return Ok(io);
             }
-            let (stream, resp) = client_async_with_config(req, io, self.ws_config.clone())
+            let (stream, resp) = client_async_with_config(req, io, self.ws_config)
                 .await
-                .map_err(|e| new_error(e))?;
+                .map_err(new_error)?;
             if resp.status() != StatusCode::SWITCHING_PROTOCOLS {
                 return Err(new_error(format!("bad status: {}", resp.status())));
             }

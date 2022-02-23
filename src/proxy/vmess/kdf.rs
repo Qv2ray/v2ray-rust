@@ -99,8 +99,8 @@ impl VmessKdf1 {
             ikey[..Self::TAG_LEN].copy_from_slice(&hkey[..Self::TAG_LEN]);
             okey[..Self::TAG_LEN].copy_from_slice(&hkey[..Self::TAG_LEN]);
         } else {
-            ikey[..key.len()].copy_from_slice(&key);
-            okey[..key.len()].copy_from_slice(&key);
+            ikey[..key.len()].copy_from_slice(key);
+            okey[..key.len()].copy_from_slice(key);
         }
 
         for idx in 0..Self::BLOCK_LEN {
@@ -125,9 +125,9 @@ impl VmessKdf1 {
         self.hasher_outer.update(&self.okey);
         self.hasher_outer.update(&h1);
 
-        let h2 = self.hasher_outer.finalize().into_bytes().into();
+        
 
-        return h2;
+        self.hasher_outer.finalize().into_bytes().into()
     }
 }
 

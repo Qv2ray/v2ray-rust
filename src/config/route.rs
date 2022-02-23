@@ -9,7 +9,7 @@ use crate::config::{geoip, geosite};
 use crate::debug_log;
 use bytes::Buf;
 use protobuf::CodedInputStream;
-use regex;
+
 use regex::{RegexSet, RegexSetBuilder};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -54,18 +54,16 @@ impl RouterBuilder {
     ) {
         if let Some(matcher) = self.domain_matchers.get_mut(outbound_tag) {
             matcher.reverse_insert(rule, match_type);
+        } else if use_mph {
+            let mut matcher = Box::new(MphMatcher::new(1));
+            matcher.reverse_insert(rule, match_type);
+            self.domain_matchers
+                .insert(outbound_tag.to_string(), matcher);
         } else {
-            if use_mph {
-                let mut matcher = Box::new(MphMatcher::new(1));
-                matcher.reverse_insert(rule, match_type);
-                self.domain_matchers
-                    .insert(outbound_tag.to_string(), matcher);
-            } else {
-                let mut matcher = Box::new(HybridMatcher::new(1));
-                matcher.reverse_insert(rule, match_type);
-                self.domain_matchers
-                    .insert(outbound_tag.to_string(), matcher);
-            }
+            let mut matcher = Box::new(HybridMatcher::new(1));
+            matcher.reverse_insert(rule, match_type);
+            self.domain_matchers
+                .insert(outbound_tag.to_string(), matcher);
         }
     }
 
@@ -239,7 +237,7 @@ impl RouterBuilder {
                 Err(e) => {
                     return Err(new_error(format!(
                         "router builder build regex set failed:{}",
-                        e.to_string()
+                        e
                     )));
                 }
             };

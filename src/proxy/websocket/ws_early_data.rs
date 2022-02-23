@@ -60,7 +60,7 @@ impl BinaryWsStreamWithEarlyData {
         ) -> io::Result<BoxProxyStream> {
             let (stream, resp) = client_async_with_config(req, io, config)
                 .await
-                .map_err(|e| new_error(e))?;
+                .map_err(new_error)?;
             if resp.status() != StatusCode::SWITCHING_PROTOCOLS {
                 return Err(new_error(format!("bad status: {}", resp.status())));
             }
@@ -161,12 +161,12 @@ impl AsyncWrite for BinaryWsStreamWithEarlyData {
             return Poll::Pending;
         }
         let this = self.get_mut();
-        return match &mut this.stream {
+        match &mut this.stream {
             None => {
                 unreachable!()
             }
             Some(s) => Pin::new(s).poll_flush(cx),
-        };
+        }
     }
 
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {

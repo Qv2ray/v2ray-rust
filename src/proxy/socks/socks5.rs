@@ -134,7 +134,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                     .put_slice(&[SOCKS_VERSION, response_code::SUCCESS, 0x00]);
                 address.write_to_buf(&mut self.read_buf);
                 self.stream.write_all(&self.read_buf).await?;
-                return Ok((self.stream, address));
+                Ok((self.stream, address))
             }
             socks_command::UDP_ASSOSIATE if udp_addr.is_some() => {
                 let socket = UdpSocket::bind((udp_addr.unwrap().ip(), 0)).await?;
@@ -148,7 +148,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                     .put_slice(&[SOCKS_VERSION, response_code::SUCCESS, 0x00]);
                 addr.write_to_buf(&mut self.read_buf);
                 self.stream.write_all(&self.read_buf).await?;
-                return Ok((self.stream, addr));
+                Ok((self.stream, addr))
             }
             _ => {
                 self.read_buf.clear();
@@ -286,13 +286,13 @@ impl Socks5UdpDatagram {
                         {
                             let (t, b) = &*rx.borrow();
                             debug_log!("write packet to remote:{},len:{}", t, b.len());
-                            out_stream_w.send_to(&b, t).await?;
+                            out_stream_w.send_to(b, t).await?;
                         }
                         loop {
                             if rx.changed().await.is_ok() {
                                 let (t, b) = &*rx.borrow();
                                 debug_log!("write packet to remote:{},len:{}", t, b.len());
-                                out_stream_w.send_to(&b, t).await?;
+                                out_stream_w.send_to(b, t).await?;
                             }
                         }
                     });
@@ -362,7 +362,7 @@ impl Decoder for Socks5UdpCodec {
             return Err(new_error("socks5 frag packet is not supported!"));
         }
         src.advance(3);
-        let dst_addr = Address::read_from_buf(&src)?;
+        let dst_addr = Address::read_from_buf(src)?;
         src.advance(dst_addr.serialized_len());
         let dst_packet = std::mem::take(src);
         Ok(Some((dst_addr, dst_packet)))
