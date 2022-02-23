@@ -28,7 +28,7 @@ impl AeadCipherHelper for Aes128Gcm {
     fn new_with_slice(key: &[u8]) -> Self {
         use aes_gcm::NewAead;
         let key = GcmKey::from_slice(key);
-        
+
         Aes128Gcm::new(key)
     }
 }
@@ -37,7 +37,7 @@ impl AeadCipherHelper for Aes256Gcm {
     fn new_with_slice(key: &[u8]) -> Self {
         use aes_gcm::NewAead;
         let key = GcmKey::from_slice(key);
-        
+
         Aes256Gcm::new(key)
     }
 }
@@ -46,7 +46,7 @@ impl AeadCipherHelper for ChaCha20Poly1305 {
     fn new_with_slice(key: &[u8]) -> Self {
         use chacha20poly1305::aead::NewAead;
         let key = Key::<Self>::from_slice(key);
-        
+
         ChaCha20Poly1305::new(key)
     }
 }

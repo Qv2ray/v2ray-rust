@@ -125,8 +125,6 @@ impl VmessKdf1 {
         self.hasher_outer.update(&self.okey);
         self.hasher_outer.update(&h1);
 
-        
-
         self.hasher_outer.finalize().into_bytes().into()
     }
 }

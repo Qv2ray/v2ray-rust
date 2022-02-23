@@ -196,9 +196,8 @@ impl Address {
                 let mut domain_name = vec![0u8; domain_len];
                 cur.copy_to_slice(&mut domain_name);
                 let port = cur.get_u16();
-                let domain_name = String::from_utf8(domain_name).map_err(|e| {
-                    new_error(format!("invalid utf8 domain name {}", e))
-                })?;
+                let domain_name = String::from_utf8(domain_name)
+                    .map_err(|e| new_error(format!("invalid utf8 domain name {}", e)))?;
                 Ok(Address::DomainNameAddress(domain_name, port))
             }
             Self::ADDR_TYPE_IPV6 => {

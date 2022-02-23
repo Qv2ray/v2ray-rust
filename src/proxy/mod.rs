@@ -189,7 +189,6 @@ impl ChainStreamBuilder {
         if let Some(idx) = iter.position(|a| a.is_uot()) {
             if idx == 0 {
                 // last builder is uot
-                
             } else {
                 // the builders first uot protocol from right to left;
                 self.last_udp_addr = self.builders[self.builders.len() - idx].get_addr();
