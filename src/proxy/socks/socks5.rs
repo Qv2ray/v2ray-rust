@@ -30,7 +30,7 @@ use tokio_util::udp::UdpFramed;
 pub struct Socks5Stream<S> {
     stream: S,
     read_buf: BytesMut,
-    authed_users: HashMap<Vec<u8>, Vec<u8>>,
+    authed_users: HashMap<Bytes, Bytes>,
 }
 
 impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
@@ -87,7 +87,8 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                     let response = [1, response_code::SUCCESS];
                     self.stream.write_all(&response).await?;
                 } else {
-                    match self.authed_users.get(&username.to_vec()) {
+                    let username = Bytes::copy_from_slice(username);
+                    match self.authed_users.get(&username) {
                         Some(saved_pass) if saved_pass == &password => {
                             let response = [1, response_code::SUCCESS];
                             self.stream.write_all(&response).await?;

@@ -7,7 +7,7 @@ use crate::proxy::{
 use async_trait::async_trait;
 
 use boring::ssl::SslMethod;
-use boring::ssl::{SslConnector, SslFiletype};
+use boring::ssl::{SslConnector, SslFiletype, SslSignatureAlgorithm};
 use std::io;
 
 use tokio_boring::{connect, SslStream};
@@ -40,8 +40,34 @@ impl TlsStreamBuilder {
                 .unwrap();
         }
         configuration
-            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
+            .set_alpn_protos(b"\x02h2\x08http/1.1")
             .unwrap();
+        configuration
+            .set_cipher_list("ALL:!aPSK:!ECDSA+SHA1:!3DES")
+            .unwrap();
+        configuration
+            .set_verify_algorithm_prefs(&[
+                SslSignatureAlgorithm::ECDSA_SECP256R1_SHA256,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA256,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA256,
+                SslSignatureAlgorithm::ECDSA_SECP384R1_SHA384,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA384,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA384,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA512,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA512,
+            ])
+            .unwrap();
+        configuration.enable_signed_cert_timestamps();
+        configuration.enable_ocsp_stapling();
+        configuration.set_grease_enabled(true);
+        unsafe {
+            boring_sys::SSL_CTX_add_cert_compression_alg(
+                configuration.as_ptr(),
+                boring_sys::TLSEXT_cert_compression_brotli as u16,
+                None,
+                Some(decompress_ssl_cert),
+            );
+        }
         Self {
             connector: configuration.build(),
             sni,
@@ -108,25 +134,85 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
     }
 }
 
+extern "C" fn decompress_ssl_cert(
+    _ssl: *mut boring_sys::SSL,
+    out: *mut *mut boring_sys::CRYPTO_BUFFER,
+    mut uncompressed_len: usize,
+    in_: *const u8,
+    in_len: usize,
+) -> libc::c_int {
+    unsafe {
+        let mut buf: *mut u8 = std::ptr::null_mut();
+        let x: *mut *mut u8 = &mut buf;
+        let allocated_buffer = boring_sys::CRYPTO_BUFFER_alloc(x, uncompressed_len);
+        if buf == std::ptr::null_mut() {
+            return 0;
+        }
+        let uncompressed_len_ptr: *mut usize = &mut uncompressed_len;
+        if brotli::ffi::decompressor::CBrotliDecoderDecompress(
+            in_len,
+            in_,
+            uncompressed_len_ptr,
+            buf,
+        ) as i32
+            == 1
+        {
+            *out = allocated_buffer;
+            return 1;
+        } else {
+            boring_sys::CRYPTO_BUFFER_free(allocated_buffer);
+            return 0;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::proxy::tls::tls::TlsStreamBuilder;
     use crate::proxy::ChainableStreamBuilder;
-    use boring::ssl::SslConnector;
     use boring::ssl::SslMethod;
+    use boring::ssl::{SslConnector, SslSignatureAlgorithm};
     use std::io;
     use std::net::ToSocketAddrs;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
     use webpki::DnsNameRef;
+
+    use super::decompress_ssl_cert;
     fn new(sni: &str) -> io::Result<TlsStreamBuilder> {
         let dns_name = DnsNameRef::try_from_ascii_str(sni)
             .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
         let dns_name = std::str::from_utf8(dns_name.as_ref()).unwrap();
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
         configuration
-            .set_alpn_protos(b"\x06spdy/1\x08http/1.1")
+            .set_alpn_protos(b"\x02h2\x08http/1.1")
             .unwrap();
+        configuration
+            .set_cipher_list("ALL:!aPSK:!ECDSA+SHA1:!3DES")
+            .unwrap();
+        configuration
+            .set_verify_algorithm_prefs(&[
+                SslSignatureAlgorithm::ECDSA_SECP256R1_SHA256,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA256,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA256,
+                SslSignatureAlgorithm::ECDSA_SECP384R1_SHA384,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA384,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA384,
+                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA512,
+                SslSignatureAlgorithm::RSA_PKCS1_SHA512,
+            ])
+            .unwrap();
+        configuration.enable_signed_cert_timestamps();
+        configuration.enable_ocsp_stapling();
+        configuration.set_grease_enabled(true);
+        unsafe {
+            boring_sys::SSL_CTX_add_cert_compression_alg(
+                configuration.as_ptr(),
+                boring_sys::TLSEXT_cert_compression_brotli as u16,
+                None,
+                Some(decompress_ssl_cert),
+            );
+        }
         Ok(TlsStreamBuilder {
             connector: configuration.build(),
             sni: dns_name.to_string(),
@@ -140,9 +226,10 @@ mod tests {
         let b = "ja3er.com:443";
         let addr = b.to_socket_addrs().unwrap().next().unwrap();
         let stream = TcpStream::connect(&addr).await.unwrap();
+        println!("local:{}", stream.local_addr().unwrap());
         let b = new("ja3er.com").unwrap();
         let mut stream = b.build_tcp(Box::new(stream)).await.unwrap();
-        stream.write_all(b"GET /json HTTP/1.1\r\nHost: ja3er.com\r\nAccept: */*\r\nUser-Agent: curl/7.81.0\r\n\r\n").await.unwrap();
+        stream.write_all(b"GET /json HTTP/1.1\r\nHost: ja3er.com\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36\r\n\r\n").await.unwrap();
         let mut buf = vec![0u8; 1024];
         stream.read_buf(&mut buf).await.unwrap();
         let response = String::from_utf8_lossy(&buf);
