@@ -290,7 +290,7 @@ impl<S: AsyncWrite + AsyncRead + Send + Unpin> UdpWrite for VmessStream<S> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-        _target: &Address,
+        #[allow(unused_variables)] target: &Address,
     ) -> Poll<io::Result<usize>> {
         #[cfg(feature = "strict-vmess-udp")]
         {
