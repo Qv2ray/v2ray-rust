@@ -19,6 +19,7 @@ mod address;
 pub mod direct;
 pub mod dokodemo_door;
 pub mod h2;
+pub mod http;
 pub mod shadowsocks;
 pub mod socks;
 pub mod tls;

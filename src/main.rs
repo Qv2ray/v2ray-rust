@@ -26,7 +26,7 @@ fn main() -> io::Result<()> {
         .about("An opinionated lightweight implementation of V2Ray, in rust programming language")
         .get_matches();
     let filename = matches.value_of("config").unwrap().to_string();
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let c = Config::read_from_file(filename)?;
     c.build_server()?.run()
 }

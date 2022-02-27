@@ -1,13 +1,15 @@
 use std::io;
 use std::mem::MaybeUninit;
 
+use crate::common::LW_BUFFER_SIZE;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
 use bytes::{BufMut, BytesMut};
 use futures_util::ready;
+use log::info;
 
-use tokio::io::{AsyncRead, ReadBuf};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
 pub use copy_with_capacity::copy_with_capacity_and_counter;
 
@@ -85,4 +87,22 @@ impl<T: Default + Copy> PollUtil for Poll<io::Result<T>> {
             Poll::Pending => Self::T::default(),
         }
     }
+}
+pub async fn relay<T1, T2>(inbound_stream: T1, outbound_stream: T2) -> io::Result<()>
+where
+    T1: AsyncRead + AsyncWrite + Unpin,
+    T2: AsyncRead + AsyncWrite + Unpin,
+{
+    let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
+    let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);
+    let mut down = 0u64;
+    let mut up = 0u64;
+    tokio::select! {
+            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE*20)=>{
+            }
+            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*20)=>{
+            }
+    }
+    info!("downloaded bytes:{}, uploaded bytes:{}", down, up);
+    Ok(())
 }

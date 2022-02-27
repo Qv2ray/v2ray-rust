@@ -64,7 +64,9 @@ h2 = "0.3.11"
 http = "0.2"
 libc = "0.2"
 brotli = "3.3.3"
-gentian = "0.1.5"
+gentian = "0.1.6"
+hyper = {version="0.14.17",features=["http1","http2","client","server"]}
+tower = "*"
 
 [profile.release]
 lto = true

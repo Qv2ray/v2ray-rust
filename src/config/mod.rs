@@ -5,8 +5,8 @@ mod ip_trie;
 mod route;
 pub use crate::config::route::Router;
 
-use crate::common::net::copy_with_capacity_and_counter;
-use crate::common::{new_error, LW_BUFFER_SIZE};
+use crate::common::net::{relay};
+use crate::common::{new_error};
 use crate::config::deserialize::{
     from_str_to_address, from_str_to_cipher_kind, from_str_to_http_method,
     from_str_to_option_address, from_str_to_path, from_str_to_security_num, from_str_to_sni,
@@ -40,9 +40,11 @@ use std::io;
 use std::io::Read;
 use std::os::raw::c_int;
 use std::sync::Arc;
-use tokio::io::{AsyncRead, AsyncWrite};
+
 use tokio::net::TcpStream;
 
+use crate::proxy::http::serve_http_conn;
+use crate::proxy::socks::SOCKS_VERSION;
 use uuid::Uuid;
 lazy_static! {
     static ref SS_LOCAL_SHARED_CONTEXT: SharedBloomContext = Arc::new(BloomContext::new(true));
@@ -637,6 +639,11 @@ impl ConfigServerBuilder {
                             let inner_map = inner_map.clone();
                             let router = router.clone();
                             async move {
+                                let mut header = [0u8; 1];
+                                io.peek(&mut header).await?;
+                                if header[0] != SOCKS_VERSION {
+                                    return serve_http_conn(io, inner_map, router).await;
+                                }
                                 let peer_ip = io.peer_addr()?.ip();
                                 let addr = if enable_udp {
                                     Some(SocketAddr::new(peer_ip, 0))
@@ -667,25 +674,6 @@ impl ConfigServerBuilder {
             })
         }
     }
-}
-
-async fn relay<T1, T2>(inbound_stream: T1, outbound_stream: T2) -> io::Result<()>
-where
-    T1: AsyncRead + AsyncWrite + Unpin,
-    T2: AsyncRead + AsyncWrite + Unpin,
-{
-    let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
-    let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);
-    let mut down = 0u64;
-    let mut up = 0u64;
-    tokio::select! {
-            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE*20)=>{
-            }
-            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*20)=>{
-            }
-    }
-    info!("downloaded bytes:{}, uploaded bytes:{}", down, up);
-    Ok(())
 }
 
 fn build_router(

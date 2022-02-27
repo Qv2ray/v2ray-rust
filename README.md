@@ -119,8 +119,9 @@ rules = ["private"]
 - ✅ UDP support
 
 ### http
-- 🚧 http Inbound
-- 🚧 mixed Inbound
+- ✅ http Inbound
+  - 🚧 RFC 7230
+- ✅ mixed Inbound
 
 ### Vmess
 
