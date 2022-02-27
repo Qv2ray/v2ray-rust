@@ -8,6 +8,7 @@ use tokio::net::TcpStream;
 use crate::common::net::relay;
 use crate::common::new_error;
 use crate::config::Router;
+use crate::debug_log;
 use crate::proxy::{Address, ChainStreamBuilder};
 use hyper::service::service_fn;
 use hyper::upgrade::Upgraded;
@@ -44,7 +45,7 @@ async fn proxy(
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
 ) -> Result<Response<Body>, hyper::Error> {
-    println!("http proxy server req: {:?}", req);
+    debug_log!("http proxy server req: {:?}", req);
 
     if Method::CONNECT == req.method() {
         if let Some(addr) = host_addr(req.uri()) {
