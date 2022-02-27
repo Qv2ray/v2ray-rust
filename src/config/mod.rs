@@ -5,8 +5,8 @@ mod ip_trie;
 mod route;
 pub use crate::config::route::Router;
 
-use crate::common::net::{relay};
-use crate::common::{new_error};
+use crate::common::net::relay;
+use crate::common::new_error;
 use crate::config::deserialize::{
     from_str_to_address, from_str_to_cipher_kind, from_str_to_http_method,
     from_str_to_option_address, from_str_to_path, from_str_to_security_num, from_str_to_sni,
@@ -717,7 +717,7 @@ fn build_router(
     for geosite_rule in vec_geosite_rules {
         let mut geosite_tag_map = HashMap::new();
         for rule in geosite_rule.rules {
-            geosite_tag_map.insert(rule, geosite_rule.tag.as_str());
+            geosite_tag_map.insert(rule.to_uppercase(), geosite_rule.tag.as_str());
         }
         builder.read_geosite_file(
             geosite_rule.file_path.as_str(),

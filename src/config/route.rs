@@ -97,6 +97,11 @@ impl RouterBuilder {
                 let (field_number, wire_type) = is.read_tag_unpack()?;
                 match field_number {
                     1 => {
+                        if !site_group_tag.is_empty() {
+                            is.read_raw_varint64()?;
+                            site_group_tag.clear();
+                            continue;
+                        }
                         is.read_string_into(&mut site_group_tag)?;
                         skip_field = geosite_tags.get(site_group_tag.as_str());
                     }
@@ -155,6 +160,11 @@ impl RouterBuilder {
         outbound_tag: &str,
         geoip_tags: HashSet<String>,
     ) -> io::Result<()> {
+        let mut tags = HashSet::new();
+        for t in geoip_tags.into_iter() {
+            tags.insert(t.to_uppercase());
+        }
+        let geoip_tags = tags;
         let mut f = match File::open(&file_name) {
             Ok(f) => f,
             Err(e) => {
@@ -181,7 +191,7 @@ impl RouterBuilder {
                             country_code.clear();
                             continue;
                         }
-                        country_code = is.read_string()?.to_lowercase();
+                        country_code = is.read_string()?.to_uppercase();
                         skip_field = !geoip_tags.contains(country_code.as_str());
                     }
                     2 => {
