@@ -55,7 +55,7 @@ async fn proxy(
                 match hyper::upgrade::on(req).await {
                     Ok(upgraded) => {
                         if let Err(e) = tunnel(upgraded, addr, inner_map, router).await {
-                            log::error!("server io error: {}", e);
+                            log::error!("http tunnel error: {}", e);
                         };
                     }
                     Err(e) => log::error!("upgrade error: {}", e),
@@ -100,6 +100,9 @@ async fn tunnel(
         let ob = router.match_addr(&addr);
         info!("routing {} to outbound:{}", addr, ob);
         stream_builder = inner_map.get(ob).unwrap();
+        if stream_builder.is_blackhole() {
+            return Ok(());
+        }
     }
     let server = stream_builder.build_tcp(addr).await?;
     relay(upgraded, server).await?;

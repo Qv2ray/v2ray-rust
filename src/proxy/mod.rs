@@ -16,6 +16,7 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::{TcpStream, UdpSocket};
 
 mod address;
+pub mod blackhole;
 pub mod direct;
 pub mod dokodemo_door;
 pub mod h2;
@@ -29,6 +30,7 @@ mod utils;
 pub mod vmess;
 pub mod websocket;
 
+use crate::common::new_error;
 use crate::proxy::utils::ChainStreamBuilderProtocolTypeIter;
 pub use address::{Address, AddressError};
 
@@ -57,7 +59,7 @@ macro_rules! debug_log {
     ($( $args:expr ),*) => {};
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ProtocolType {
     SS,
     TLS,
@@ -66,6 +68,7 @@ pub enum ProtocolType {
     TROJAN,
     DIRECT,
     H2,
+    BLACKHOLE,
 }
 
 impl ProtocolType {
@@ -167,6 +170,7 @@ pub struct ChainStreamBuilder {
     last_builder: Option<Box<dyn ToChainableStreamBuilder>>,
     #[allow(dead_code)]
     is_full_cone: bool,
+    is_black_hole: bool,
 }
 
 impl ChainStreamBuilder {
@@ -178,10 +182,14 @@ impl ChainStreamBuilder {
             build_udp_marker: Default::default(),
             last_builder: None,
             is_full_cone: true,
+            is_black_hole: false,
         }
     }
 
-    pub fn build_udp_marker(&mut self) {
+    pub fn build_inner_markers(&mut self) {
+        let mut iter = ChainStreamBuilderProtocolTypeIter::new(&self.builders, &self.last_builder);
+        self.is_black_hole = iter.any(|x| x == ProtocolType::BLACKHOLE);
+
         let iter = ChainStreamBuilderProtocolTypeIter::new(&self.builders, &self.last_builder);
         build_udp_marker_impl(&mut self.build_udp_marker, iter);
         let mut iter = ChainStreamBuilderProtocolTypeIter::new(&self.builders, &self.last_builder);
@@ -195,6 +203,10 @@ impl ChainStreamBuilder {
         } else {
             self.last_udp_addr = self.remote_addr.clone();
         }
+    }
+
+    pub fn is_blackhole(&self) -> bool {
+        self.is_black_hole
     }
 
     pub fn remote_addr_is_none(&self) -> bool {
@@ -214,6 +226,9 @@ impl ChainStreamBuilder {
     }
 
     pub async fn build_tcp(&self, proxy_addr: Address) -> io::Result<BoxProxyStream> {
+        if self.is_black_hole {
+            return Err(new_error("block connection"));
+        }
         return if let Some(remote_addr) = &self.remote_addr {
             let outer_stream = remote_addr.connect_tcp().await?;
             let mut outer_stream: Box<dyn ProxySteam> = Box::new(outer_stream);
@@ -249,6 +264,9 @@ impl ChainStreamBuilder {
         proxy_addr: Address,
         udp_bind_ip: IpAddr,
     ) -> io::Result<BoxProxyUdpStream> {
+        if self.is_black_hole {
+            return Err(new_error("block connection"));
+        }
         let mut outer_stream: BoxProxyUdpStream;
         // debug_log!("build udp marker len:{}", self.build_udp_marker.len());
         debug_log!("build udp marker:{}", self.build_udp_marker);

@@ -44,9 +44,12 @@ tag = "h2"
 hosts = ["example.org"]
 path = "/test"
 
+[[blackhole]]
+tag = "b"
+
 [[outbounds]]
-#chain = ["w","v"]
-chain = ["h2","v"]
+chain = ["w","v"]
+#chain = ["h2","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]
 # chain = ["ss0","ss1","ss2","ss3"]
@@ -54,6 +57,10 @@ chain = ["h2","v"]
 # chain = ["ss0"]
 # debug
 tag = "cn"
+
+[[outbounds]]
+chain = ["b"]
+tag = "block"
 
 [[outbounds]]
 chain = ["d"]
@@ -66,6 +73,9 @@ enable_udp = true
 # [[dokodemo]]
 # addr = "127.0.0.1:12345"
 # tproxy = true
+[[domain_routing_rules]]
+tag = "block"
+domain_rules = ["baidu.com"]
 
 [[geosite_rules]]
 tag = "cn"

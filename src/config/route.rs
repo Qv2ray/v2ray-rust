@@ -11,7 +11,7 @@ use bytes::Buf;
 use protobuf::CodedInputStream;
 
 use regex::{RegexSet, RegexSetBuilder};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io;
 
@@ -20,17 +20,17 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use super::ip_trie::GeoIPMatcher;
 
 pub(super) struct RouterBuilder {
-    domain_matchers: HashMap<String, Box<dyn DomainMatcher>>,
+    domain_matchers: BTreeMap<String, Box<dyn DomainMatcher>>,
     ip_matcher: GeoIPMatcher,
-    regex_matchers: HashMap<String, Vec<String>>,
+    regex_matchers: BTreeMap<String, Vec<String>>,
 }
 
 impl RouterBuilder {
     pub fn new() -> RouterBuilder {
         RouterBuilder {
-            domain_matchers: HashMap::new(),
+            domain_matchers: BTreeMap::new(),
             ip_matcher: GeoIPMatcher::new(),
-            regex_matchers: HashMap::new(),
+            regex_matchers: BTreeMap::new(),
         }
     }
 

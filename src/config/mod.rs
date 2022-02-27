@@ -43,6 +43,7 @@ use std::sync::Arc;
 
 use tokio::net::TcpStream;
 
+use crate::proxy::blackhole::BlackHoleStreamBuilder;
 use crate::proxy::http::serve_http_conn;
 use crate::proxy::socks::SOCKS_VERSION;
 use uuid::Uuid;
@@ -254,6 +255,32 @@ struct ShadowsocksConfig {
 }
 
 #[derive(Deserialize, Clone)]
+struct BlackHoleConfig {
+    tag: String,
+}
+
+impl ToChainableStreamBuilder for BlackHoleConfig {
+    fn to_chainable_stream_builder(
+        &self,
+        _addr: Option<Address>,
+    ) -> Box<dyn ChainableStreamBuilder> {
+        Box::new(BlackHoleStreamBuilder)
+    }
+
+    fn tag(&self) -> &str {
+        self.tag.as_str()
+    }
+
+    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
+        Box::new(self.clone())
+    }
+
+    fn get_protocol_type(&self) -> ProtocolType {
+        ProtocolType::BLACKHOLE
+    }
+}
+
+#[derive(Deserialize, Clone)]
 struct DirectConfig {
     tag: String,
 }
@@ -425,6 +452,8 @@ pub struct Config {
     #[serde(default)]
     direct: Vec<DirectConfig>,
     #[serde(default)]
+    blackhole: Vec<BlackHoleConfig>,
+    #[serde(default)]
     dokodemo: Vec<DokodemoDoor>,
     #[serde(default)]
     domain_routing_rules: Vec<DomainRoutingRules>,
@@ -453,6 +482,7 @@ impl std::ops::Index<(ProtocolType, usize)> for Config {
             ProtocolType::TROJAN => &self.trojan[index.1],
             ProtocolType::DIRECT => &self.direct[index.1],
             ProtocolType::H2 => &self.h2[index.1],
+            ProtocolType::BLACKHOLE => &self.blackhole[index.1],
         }
     }
 }
@@ -483,6 +513,7 @@ impl Config {
         insert_config_map!(self.trojan, config_map);
         insert_config_map!(self.direct, config_map);
         insert_config_map!(self.h2, config_map);
+        insert_config_map!(self.blackhole, config_map);
         let mut inner_map = HashMap::new();
         for out in self.outbounds.iter() {
             let mut addrs = Vec::new();
@@ -522,7 +553,7 @@ impl Config {
                     }
                 }
             });
-            builder.build_udp_marker();
+            builder.build_inner_markers();
             inner_map.insert(out.tag.clone(), builder);
         }
         Ok(inner_map)
