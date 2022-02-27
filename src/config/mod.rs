@@ -182,7 +182,7 @@ impl ToChainableStreamBuilder for TlsConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::TROJAN
+        ProtocolType::TLS
     }
 }
 
