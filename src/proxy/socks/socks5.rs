@@ -184,9 +184,7 @@ struct NatMap(
 
 impl NatMap {
     fn new() -> NatMap {
-        Self {
-            0: Default::default(),
-        }
+        Self(Default::default())
     }
 
     fn get_mut_sender(&mut self, outbound_tag: &str) -> Option<&mut OutBoundPacketSender> {

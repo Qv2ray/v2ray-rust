@@ -81,7 +81,7 @@ async fn proxy(
 fn host_addr(uri: &http::Uri) -> Option<Address> {
     uri.authority().and_then(|auth| {
         Address::from_str(auth.as_str())
-            .map(|e| Some(e))
+            .map(Some)
             .unwrap_or(None)
     })
 }

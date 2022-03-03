@@ -73,21 +73,34 @@ enable_udp = true
 # [[dokodemo]]
 # addr = "127.0.0.1:12345"
 # tproxy = true
+[[ip_routing_rules]]
+tag = "block"
+# only block 192.168.0.1 and route 192.168.0.2-192.168.0.254 to other outbounds
+cidr_rules = ["192.168.0.1/32"]
+
 [[domain_routing_rules]]
 tag = "block"
 domain_rules = ["baidu.com"]
 
+
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geosite_rules]]
 tag = "cn"
-file_path = "/usr/share/v2ray/geosite.dat"
+# file_path = "your_custom_geosite_file_path"
 rules = ["cn"]
 
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geoip_rules]]
 tag = "cn"
-file_path = "/usr/share/v2ray/geoip.dat"
+# file_path = "your_custom_geoip_file_path"
 rules = ["cn"]
 
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geoip_rules]]
 tag="private"
-file_path = "/usr/share/v2ray/geoip.dat"
+# file_path = "your_custom_geoip_file_path"
 rules = ["private"]
+

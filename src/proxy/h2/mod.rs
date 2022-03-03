@@ -1,5 +1,4 @@
 use crate::common::{new_error, LW_BUFFER_SIZE};
-use crate::config::Http2Config;
 use crate::proxy::{
     BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxyUdpStream,
     UdpRead, UdpWrite,
@@ -17,7 +16,29 @@ use std::pin::Pin;
 use std::task::{Context, Poll};
 use tokio::io::{AsyncRead, AsyncWrite};
 
-impl Http2Config {
+#[derive(Clone)]
+pub struct Http2StreamBuilder {
+    pub hosts: Vec<String>,
+    pub headers: Vec<(String, String)>,
+    pub method: http::Method,
+    pub path: http::uri::PathAndQuery,
+}
+
+impl Http2StreamBuilder {
+    pub fn new(
+        hosts: Vec<String>,
+        headers: Vec<(String, String)>,
+        method: http::Method,
+        path: http::uri::PathAndQuery,
+    ) -> Self {
+        Self {
+            hosts,
+            headers,
+            method,
+            path,
+        }
+    }
+
     fn req(&self) -> io::Result<Request<()>> {
         let uri_idx = random::<usize>() % self.hosts.len();
         let uri: Uri = {
@@ -58,7 +79,7 @@ macro_rules! http2_build_tcp_impl {
 }
 
 #[async_trait]
-impl ChainableStreamBuilder for Http2Config {
+impl ChainableStreamBuilder for Http2StreamBuilder {
     async fn build_tcp(&self, io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
         http2_build_tcp_impl!(self, io);
     }

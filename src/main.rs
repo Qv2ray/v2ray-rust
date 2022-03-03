@@ -2,6 +2,7 @@ extern crate core;
 
 use crate::config::Config;
 use clap::{App, Arg};
+use log::info;
 use std::io;
 
 mod common;
@@ -22,11 +23,23 @@ fn main() -> io::Result<()> {
                 .takes_value(true)
                 .help(".toml config file name"),
         )
+        .arg(
+            Arg::new("validate")
+                .short('t')
+                .long("test")
+                .required(false)
+                .help("validate given toml config file"),
+        )
         .author("Developed by @darsvador")
         .about("An opinionated lightweight implementation of V2Ray, in rust programming language")
         .get_matches();
-    let filename = matches.value_of("config").unwrap().to_string();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
+    let filename = matches.value_of("config").unwrap().to_string();
+    if matches.is_present("validate") {
+        let _ = Config::read_from_file(filename)?;
+        info!("A valid config file.");
+        return Ok(());
+    }
     let c = Config::read_from_file(filename)?;
     c.build_server()?.run()
 }

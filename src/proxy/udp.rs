@@ -27,7 +27,7 @@ impl ConnectedUdpSocket {
     ) -> io::Result<ConnectedUdpSocket> {
         let mut addrs = lookup_host(addr).await?;
         if let Some(addr) = addrs.next() {
-            return Ok(ConnectedUdpSocket { 0: socket, 1: addr });
+            return Ok(ConnectedUdpSocket(socket, addr));
         }
         Err(new_error("no valid addr after lookup_host"))
     }

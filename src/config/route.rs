@@ -8,6 +8,7 @@ use domain_matcher::MatchType;
 use crate::config::{geoip, geosite};
 use crate::debug_log;
 use bytes::Buf;
+use cidr_utils::cidr::IpCidr;
 use protobuf::CodedInputStream;
 
 use regex::{RegexSet, RegexSetBuilder};
@@ -16,6 +17,7 @@ use std::fs::File;
 use std::io;
 
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
+use std::path::Path;
 
 use super::ip_trie::GeoIPMatcher;
 
@@ -44,6 +46,32 @@ impl RouterBuilder {
         }
     }
 
+    pub fn add_cidr_rules(&mut self, outbound_tag: &str, ip_rules: &Vec<String>) {
+        for rule in ip_rules {
+            if IpCidr::is_ip_cidr(rule) {
+                let cidr = IpCidr::from_str(rule).unwrap();
+                match cidr {
+                    IpCidr::V4(v4) => {
+                        self.ip_matcher.put_v4(
+                            v4.get_prefix(),
+                            v4.get_bits(),
+                            outbound_tag.to_string(),
+                        );
+                    }
+                    IpCidr::V6(v6) => {
+                        self.ip_matcher.put_v6(
+                            v6.get_prefix(),
+                            v6.get_bits(),
+                            outbound_tag.to_string(),
+                        );
+                    }
+                }
+            } else {
+                log::warn!("Add IP rule failed. Ignore invalid IP CIDR:{}", rule)
+            }
+        }
+    }
+
     // domain_rules -> (rule, (outbound_tag, match_type))
     pub fn add_domain_rules(
         &mut self,
@@ -68,9 +96,9 @@ impl RouterBuilder {
     }
 
     // geosite_tags => Map(geosite rule,outbound_tags)
-    pub fn read_geosite_file(
+    pub fn read_geosite_file<P: AsRef<Path>>(
         &mut self,
-        file_name: &str,
+        file_name: P,
         geosite_tags: HashMap<String, &str>,
         use_mph: bool,
     ) -> io::Result<()> {
@@ -85,7 +113,16 @@ impl RouterBuilder {
                 }
             }
         }
-        let mut f = File::open(&file_name)?;
+        let mut f = match File::open(&file_name) {
+            Ok(f) => f,
+            Err(e) => {
+                return Err(new_error(format!(
+                    "open geosite file {} failed: {}",
+                    file_name.as_ref().display(),
+                    e
+                )));
+            }
+        };
         let mut is = CodedInputStream::new(&mut f);
         let mut domain: geosite::Domain;
         let mut site_group_tag = String::new();
@@ -154,9 +191,9 @@ impl RouterBuilder {
     }
 
     // geoip_tags => Map(geoip rule, outbound tag)
-    pub fn read_geoip_file(
+    pub fn read_geoip_file<P: AsRef<Path>>(
         &mut self,
-        file_name: &str,
+        file_name: P,
         outbound_tag: &str,
         geoip_tags: HashSet<String>,
     ) -> io::Result<()> {
@@ -170,7 +207,8 @@ impl RouterBuilder {
             Err(e) => {
                 return Err(new_error(format!(
                     "open geoip file {} failed: {}",
-                    file_name, e
+                    file_name.as_ref().display(),
+                    e
                 )));
             }
         };
@@ -296,26 +334,26 @@ impl Router {
     pub fn match_socket_addr(&self, addr: &SocketAddr) -> &str {
         use std::net::IpAddr;
         let addr = addr.ip();
-        match addr {
+        return match addr {
             IpAddr::V4(e) => {
                 let ip4 = socket_addr_v4_to_u32(e);
                 let res = self.ip_matcher.match4(ip4);
-                return if res.is_empty() {
+                if res.is_empty() {
                     self.default_outbound_tag.as_str()
                 } else {
                     res
-                };
+                }
             }
             IpAddr::V6(e) => {
                 let ip6 = socket_addr_v6_to_u128(e);
                 let res = self.ip_matcher.match6(ip6);
-                return if res.is_empty() {
+                if res.is_empty() {
                     self.default_outbound_tag.as_str()
                 } else {
                     res
-                };
+                }
             }
-        }
+        };
     }
     pub fn match_addr(&self, addr: &Address) -> &str {
         match addr {

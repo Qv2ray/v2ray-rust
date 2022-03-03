@@ -158,10 +158,10 @@ extern "C" fn decompress_ssl_cert(
             == 1
         {
             *out = allocated_buffer;
-            return 1;
+            1
         } else {
             boring_sys::CRYPTO_BUFFER_free(allocated_buffer);
-            return 0;
+            0
         }
     }
 }

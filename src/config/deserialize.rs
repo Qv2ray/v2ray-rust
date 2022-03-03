@@ -5,6 +5,8 @@ use http::uri::PathAndQuery;
 use http::Method;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
+use std::env;
+use std::path::PathBuf;
 use tokio_tungstenite::tungstenite::http::Uri;
 use uuid::Uuid;
 use webpki::DnsNameRef;
@@ -196,6 +198,42 @@ where
     let dns_name = DnsNameRef::try_from_ascii_str(sni).map_err(D::Error::custom)?;
     let res = std::str::from_utf8(dns_name.as_ref()).map_err(D::Error::custom)?;
     Ok(res.to_owned())
+}
+
+pub(super) fn default_backlog() -> u32 {
+    4096
+}
+pub(super) fn default_true() -> bool {
+    true
+}
+
+#[inline]
+pub(super) fn default_http2_method() -> http::Method {
+    http::Method::PUT
+}
+
+fn default_v2ray_asset_path(file_name: &str) -> PathBuf {
+    let mut prefix = env::var("v2ray.location.asset")
+        .map(|e| PathBuf::from(e))
+        .unwrap_or(
+            env::var("V2RAY_LOCATION_ASSET")
+                .map(|e| PathBuf::from(e))
+                .unwrap_or_else(|_| {
+                    let mut path_buf = std::env::current_exe().unwrap_or_default();
+                    path_buf.pop();
+                    path_buf
+                }),
+        );
+    prefix.push(file_name);
+    prefix
+}
+
+pub(super) fn default_v2ray_geosite_path() -> PathBuf {
+    default_v2ray_asset_path("geosite.dat")
+}
+
+pub(super) fn default_v2ray_geoip_path() -> PathBuf {
+    default_v2ray_asset_path("geoip.dat")
 }
 
 #[cfg(test)]

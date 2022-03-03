@@ -3,72 +3,54 @@ mod geoip;
 mod geosite;
 mod ip_trie;
 mod route;
-pub use crate::config::route::Router;
+mod to_chainable_builder;
+
+pub use route::Router;
+pub use to_chainable_builder::ToChainableStreamBuilder;
 
 use crate::common::net::relay;
 use crate::common::new_error;
 use crate::config::deserialize::{
-    from_str_to_address, from_str_to_cipher_kind, from_str_to_http_method,
-    from_str_to_option_address, from_str_to_path, from_str_to_security_num, from_str_to_sni,
-    from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
+    default_backlog, default_http2_method, default_true, default_v2ray_geoip_path,
+    default_v2ray_geosite_path, from_str_to_address, from_str_to_cipher_kind,
+    from_str_to_http_method, from_str_to_option_address, from_str_to_path,
+    from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
-use crate::proxy::shadowsocks::ShadowsocksBuilder;
+
 use crate::proxy::socks::socks5::{Socks5Stream, Socks5UdpDatagram};
-use crate::proxy::tls::tls::TlsStreamBuilder;
-use crate::proxy::trojan::TrojanStreamBuilder;
-use crate::proxy::vmess::vmess_option::VmessOption;
-use crate::proxy::vmess::VmessBuilder;
-use crate::proxy::websocket::BinaryWsStreamBuilder;
-use crate::proxy::{Address, ChainStreamBuilder, ChainableStreamBuilder, ProtocolType};
+
+use crate::proxy::{Address, ChainStreamBuilder, ProtocolType};
 use actix_server::Server;
 use actix_service::fn_service;
-use lazy_static::lazy_static;
 
 use serde::Deserialize;
 
-use std::net::{SocketAddr, TcpListener as StdTcpListener};
+use std::net::SocketAddr;
 
 use crate::config::route::RouterBuilder;
-use crate::proxy::direct::DirectStreamBuilder;
+
 use domain_matcher::MatchType;
-use log::{debug, info};
+use log::info;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::os::raw::c_int;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::net::TcpStream;
 
-use crate::proxy::blackhole::BlackHoleStreamBuilder;
+use crate::proxy::dokodemo_door::build_dokodemo_door_listener;
 use crate::proxy::http::serve_http_conn;
 use crate::proxy::socks::SOCKS_VERSION;
 use uuid::Uuid;
-lazy_static! {
-    static ref SS_LOCAL_SHARED_CONTEXT: SharedBloomContext = Arc::new(BloomContext::new(true));
-}
-
-pub trait ToChainableStreamBuilder: Sync + Send {
-    fn to_chainable_stream_builder(&self, addr: Option<Address>)
-        -> Box<dyn ChainableStreamBuilder>;
-    fn tag(&self) -> &str;
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder>;
-    fn get_protocol_type(&self) -> ProtocolType;
-    fn get_addr(&self) -> Option<Address> {
-        None
-    }
-}
-impl Clone for Box<dyn ToChainableStreamBuilder> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
+static SS_LOCAL_SHARED_CONTEXT: once_cell::sync::Lazy<SharedBloomContext> =
+    once_cell::sync::Lazy::new(|| Arc::new(BloomContext::new(true)));
 
 #[derive(Deserialize, Clone)]
-pub struct VmessConfig {
+struct VmessConfig {
     #[serde(deserialize_with = "from_str_to_address")]
     addr: Address,
     #[serde(deserialize_with = "from_str_to_uuid")]
@@ -81,76 +63,16 @@ pub struct VmessConfig {
     tag: String,
 }
 
-impl ToChainableStreamBuilder for VmessConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(VmessBuilder {
-            vmess_option: VmessOption {
-                uuid: self.uuid,
-                alter_id: 0,
-                addr: addr.unwrap(),
-                security_num: self.security_num,
-                is_udp: false,
-            },
-        })
-    }
-
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::VMESS
-    }
-
-    fn get_addr(&self) -> Option<Address> {
-        Some(self.addr.clone())
-    }
-}
-
 #[derive(Deserialize, Clone)]
-pub struct TrojanConfig {
+struct TrojanConfig {
     password: String,
     #[serde(deserialize_with = "from_str_to_address")]
     addr: Address,
     tag: String,
 }
 
-impl ToChainableStreamBuilder for TrojanConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(TrojanStreamBuilder::new(
-            addr.unwrap(),
-            self.password.as_bytes(),
-            false,
-        ))
-    }
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::TROJAN
-    }
-
-    fn get_addr(&self) -> Option<Address> {
-        Some(self.addr.clone())
-    }
-}
-
 #[derive(Deserialize, Clone)]
-pub struct TlsConfig {
+struct TlsConfig {
     #[serde(deserialize_with = "from_str_to_sni")]
     sni: String,
     cert_file: Option<String>,
@@ -162,33 +84,8 @@ pub struct TlsConfig {
     tag: String,
 }
 
-impl ToChainableStreamBuilder for TlsConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        _addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(TlsStreamBuilder::new_from_config(
-            self.sni.clone(),
-            &self.cert_file,
-            &self.key_file,
-            self.verify_hostname,
-            self.verify_sni,
-        ))
-    }
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::TLS
-    }
-}
-
 #[derive(Deserialize, Clone)]
-pub struct WebsocketConfig {
+struct WebsocketConfig {
     #[serde(deserialize_with = "from_str_to_ws_uri")]
     uri: EarlyDataUri,
     #[serde(default)]
@@ -198,50 +95,6 @@ pub struct WebsocketConfig {
     #[serde(default)]
     headers: Vec<(String, String)>,
     tag: String,
-}
-
-impl ToChainableStreamBuilder for WebsocketConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        _addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        // we use early data config in uri query.
-        if self.uri.max_early_data > 0 {
-            Box::new(BinaryWsStreamBuilder::new_from_config(
-                self.uri.uri.clone(),
-                self.uri.max_early_data,
-                self.uri.early_data_header_name.clone(),
-                None,
-                self.headers.clone(),
-            ))
-        } else if self.max_early_data > 0 && !self.early_data_header_name.is_empty() {
-            Box::new(BinaryWsStreamBuilder::new_from_config(
-                self.uri.uri.clone(),
-                self.max_early_data,
-                self.early_data_header_name.clone(),
-                None,
-                self.headers.clone(),
-            ))
-        } else {
-            Box::new(BinaryWsStreamBuilder::new_from_config(
-                self.uri.uri.clone(),
-                0,
-                String::new(),
-                None,
-                self.headers.clone(),
-            ))
-        }
-    }
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::WS
-    }
 }
 
 #[derive(Deserialize, Clone)]
@@ -259,111 +112,51 @@ struct BlackHoleConfig {
     tag: String,
 }
 
-impl ToChainableStreamBuilder for BlackHoleConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        _addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(BlackHoleStreamBuilder)
-    }
-
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::BLACKHOLE
-    }
-}
-
 #[derive(Deserialize, Clone)]
 struct DirectConfig {
     tag: String,
 }
-impl ToChainableStreamBuilder for DirectConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        _addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(DirectStreamBuilder)
-    }
-
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::DIRECT
-    }
-}
-
-impl ToChainableStreamBuilder for ShadowsocksConfig {
-    fn to_chainable_stream_builder(
-        &self,
-        addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        Box::new(ShadowsocksBuilder::new_from_config(
-            addr.unwrap(),
-            self.password.as_str(),
-            self.method,
-            SS_LOCAL_SHARED_CONTEXT.clone(),
-        ))
-    }
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::SS
-    }
-
-    fn get_addr(&self) -> Option<Address> {
-        Some(self.addr.clone())
-    }
-}
 
 #[derive(Deserialize)]
-pub struct Outbounds {
+struct Outbounds {
     chain: Vec<String>,
     tag: String,
 }
 
 #[derive(Deserialize)]
-pub struct Inbounds {
+struct Inbounds {
     #[serde(deserialize_with = "from_str_to_address")]
     addr: Address,
     #[serde(default)]
     enable_udp: bool,
 }
+
 #[derive(Deserialize)]
-pub struct GeoSiteRules {
+struct GeoSiteRules {
     tag: String,
-    file_path: String,
+    #[serde(default = "default_v2ray_geosite_path")]
+    file_path: PathBuf,
     rules: Vec<String>,
     #[serde(default)]
     use_mph: bool,
 }
 
 #[derive(Deserialize)]
-pub struct GeoIpRules {
+struct GeoIpRules {
     tag: String,
-    file_path: String,
+    #[serde(default = "default_v2ray_geoip_path")]
+    file_path: PathBuf,
     rules: HashSet<String>,
 }
 
 #[derive(Deserialize)]
-pub struct DomainRoutingRules {
+struct IpRoutingRules {
+    tag: String,
+    cidr_rules: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct DomainRoutingRules {
     tag: String,
     #[serde(default)]
     full_rules: Vec<String>,
@@ -377,62 +170,29 @@ pub struct DomainRoutingRules {
     use_mph: bool,
 }
 
-fn default_backlog() -> u32 {
-    4096
-}
-fn default_true() -> bool {
-    true
-}
-
 #[derive(Deserialize)]
-pub struct DokodemoDoor {
+pub(crate) struct DokodemoDoor {
     #[serde(default)]
-    tproxy: bool,
+    pub tproxy: bool,
     #[serde(deserialize_with = "from_str_to_address")]
-    addr: Address,
+    pub addr: Address,
     #[serde(default, deserialize_with = "from_str_to_option_address")]
-    target_addr: Option<Address>,
-}
-
-#[inline]
-fn default_http2_method() -> http::Method {
-    http::Method::PUT
+    pub target_addr: Option<Address>,
 }
 
 #[derive(Deserialize, Clone)]
-pub struct Http2Config {
+struct Http2Config {
     tag: String,
-    pub(crate) hosts: Vec<String>,
+    hosts: Vec<String>,
     #[serde(default)]
-    pub(crate) headers: Vec<(String, String)>,
+    headers: Vec<(String, String)>,
     #[serde(
         default = "default_http2_method",
         deserialize_with = "from_str_to_http_method"
     )]
-    pub(crate) method: http::Method,
+    method: http::Method,
     #[serde(deserialize_with = "from_str_to_path")]
-    pub(crate) path: http::uri::PathAndQuery,
-}
-
-impl ToChainableStreamBuilder for Http2Config {
-    fn to_chainable_stream_builder(
-        &self,
-        _addr: Option<Address>,
-    ) -> Box<dyn ChainableStreamBuilder> {
-        ChainableStreamBuilder::clone_box(self)
-    }
-
-    fn tag(&self) -> &str {
-        self.tag.as_str()
-    }
-
-    fn clone_box(&self) -> Box<dyn ToChainableStreamBuilder> {
-        Box::new(self.clone())
-    }
-
-    fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::H2
-    }
+    path: http::uri::PathAndQuery,
 }
 
 #[derive(Deserialize)]
@@ -457,6 +217,8 @@ pub struct Config {
     dokodemo: Vec<DokodemoDoor>,
     #[serde(default)]
     domain_routing_rules: Vec<DomainRoutingRules>,
+    #[serde(default)]
+    ip_routing_rules: Vec<IpRoutingRules>,
     #[serde(default)]
     h2: Vec<Http2Config>,
     #[serde(default)]
@@ -569,6 +331,7 @@ impl Config {
         let default_outbound_tag = self.default_outbound.as_str();
         let router = build_router(
             std::mem::take(&mut self.domain_routing_rules),
+            std::mem::take(&mut self.ip_routing_rules),
             std::mem::take(&mut self.geosite_rules),
             std::mem::take(&mut self.geoip_rules),
             default_outbound_tag.to_string(),
@@ -603,30 +366,8 @@ impl ConfigServerBuilder {
                 for door in self.dokodemo.iter_mut() {
                     let inner_map = inner_map.clone();
                     let router = router.clone();
-                    let domain = match door.addr {
-                        Address::SocketAddress(SocketAddr::V4(_)) => socket2::Domain::IPV4,
-                        Address::SocketAddress(SocketAddr::V6(_)) => socket2::Domain::IPV6,
-                        Address::DomainNameAddress(_, _) => {
-                            return Err(new_error("unsupported dokodemo door listen addr type."));
-                        }
-                    };
-                    let socket = socket2::Socket::new(
-                        domain,
-                        socket2::Type::STREAM,
-                        Some(socket2::Protocol::TCP),
-                    )?;
-                    socket.set_nonblocking(true)?;
-                    #[cfg(target_os = "linux")]
-                    {
-                        info!("set tproxy to {}", door.tproxy);
-                        socket.set_reuse_address(true)?;
-                        socket.set_ip_transparent(door.tproxy)?;
-                    }
-                    let addr = door.addr.get_sock_addr().into();
-                    socket.bind(&addr)?;
-                    socket.listen(self.backlog as c_int)?;
-                    let target_addr = std::mem::take(&mut door.target_addr);
-                    let std_listener = StdTcpListener::from(socket);
+                    let target_addr = door.target_addr.take();
+                    let std_listener = build_dokodemo_door_listener(door, self.backlog)?;
                     server = server.listen("dokodemo", std_listener, move || {
                         let target_addr = target_addr.clone();
                         let inner_map = inner_map.clone();
@@ -644,10 +385,9 @@ impl ConfigServerBuilder {
                                 let stream_builder;
                                 {
                                     let ob = router.match_socket_addr(&dokodemo_door_addr);
-                                    debug!(
+                                    info!(
                                         "routing dokodemo addr {} to outbound:{}",
-                                        dokodemo_door_addr.to_string(),
-                                        ob
+                                        dokodemo_door_addr, ob
                                     );
                                     stream_builder = inner_map.get(ob).unwrap();
                                 }
@@ -709,6 +449,7 @@ impl ConfigServerBuilder {
 
 fn build_router(
     vec_domain_routing_rules: Vec<DomainRoutingRules>,
+    vec_ip_routing_rules: Vec<IpRoutingRules>,
     vec_geosite_rules: Vec<GeoSiteRules>,
     vec_geoip_rules: Vec<GeoIpRules>,
     default_outbound_tag: String,
@@ -745,20 +486,23 @@ fn build_router(
             domain_routing_rules.regex_rules,
         );
     }
+    for cidr_rules in vec_ip_routing_rules {
+        builder.add_cidr_rules(cidr_rules.tag.as_str(), &cidr_rules.cidr_rules);
+    }
     for geosite_rule in vec_geosite_rules {
         let mut geosite_tag_map = HashMap::new();
         for rule in geosite_rule.rules {
             geosite_tag_map.insert(rule.to_uppercase(), geosite_rule.tag.as_str());
         }
         builder.read_geosite_file(
-            geosite_rule.file_path.as_str(),
+            geosite_rule.file_path,
             geosite_tag_map,
             geosite_rule.use_mph,
         )?;
     }
     for geoip_rule in vec_geoip_rules {
         builder.read_geoip_file(
-            geoip_rule.file_path.as_str(),
+            geoip_rule.file_path,
             geoip_rule.tag.as_str(),
             geoip_rule.rules,
         )?;
