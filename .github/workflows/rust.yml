@@ -2,22 +2,71 @@ name: Rust
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: 
+      - 'main'
+      - 'dev'
+    paths-ignore: 
+      -'README.md'
+      -'LICENSE'
+      
   pull_request:
-    branches: [ main, dev ]
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: 
+      -'main' 
+      -'dev' 
+    paths-ignore: 
+      -'README.md'
+      -'LICENSE'
+      
+  release:
+    types: 
+      -'prereleased' 
+      -'published' 
+      -'released'
+      
+  # For test
+  workflow_dispatch:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    env:
+      CARGO_TERM_COLOR: always
+    name: '${{ matrix.config.name }}'
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        #- {
+        #    name: "Windows-x86_64", artifact: "Windows-x86_64",
+        #    os: windows-latest,
+        #    has_release: true,
+        #    target_triple: x86_64-pc-windows
+        #  }
+        - {
+            name: "Linux", artifact: "Linux-x86_64",
+            os: ubuntu-latest,
+            has_release: true,
+            target_triple: x86_64-unknown-linux-gnu
+          }
+        #- {
+        #    name: "macOS-x64", artifact: "macOS-x64",
+        #    os: macos-latest,
+        #    has_release: true,
+        #    target_triple: x86_64-apple-darwin
+        #  }
+        #- {
+        #    name: "macOS-arm64", artifact: "macOS-arm64",
+        #    os: macos-latest,
+        #    has_release: true,
+        #    target_triple: aarch64-apple-darwin
+        #  }
+          
     steps:
     - uses: actions/checkout@v2
-    - name: install protoc
-      run:  sudo apt install -y protobuf-compiler
+    
+    - name: Install protoc
+      uses: arduino/setup-protoc@v1.1.2
+          
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
@@ -26,12 +75,66 @@ jobs:
             components: rustfmt, clippy
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
+      
     - name: Run cargo check
       uses: actions-rs/cargo@v1
       with:
-        command: check
-
+        command: check    
+        
     - name: Build
-      run: cargo build --verbose
+      run: |
+        mkdir build_assets
+        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
+      
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        mkdir build_assets_tests
+        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
+        
+    - name: Add geoip,geosite to release
+      run: |
+        cp ${GITHUB_WORKSPACE}/README.md ./build_assets/${{matrix.config.target_triple}}/release/README.md
+        cp ${GITHUB_WORKSPACE}/LICENSE ./build_assets/${{matrix.config.target_triple}}/release/LICENSE
+        LIST=('geoip geoip geoip' 'domain-list-community dlc geosite')
+        for i in "${LIST[@]}"
+        do
+          INFO=($(echo $i | awk 'BEGIN{FS=" ";OFS=" "} {print $1,$2,$3}'))
+          LASTEST_TAG="$(curl -sL "https://api.github.com/repos/v2fly/${INFO[0]}/releases" | jq -r ".[0].tag_name" || echo "latest")"
+          FILE_NAME="${INFO[2]}.dat"
+          echo -e "Downloading ${FILE_NAME}..."
+          curl -L "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat" -o ./build_assets/${{matrix.config.target_triple}}/release/${FILE_NAME}
+          echo -e "Verifying HASH key..."
+          HASH="$(curl -sL "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat.sha256sum" | awk -F ' ' '{print $1}')"
+          [ "$(sha256sum "./build_assets/${{matrix.config.target_triple}}/release/${FILE_NAME}" | awk -F ' ' '{print $1}')" == "${HASH}" ] || { echo -e "The HASH key of ${FILE_NAME} does not match cloud one."; exit 1; }
+        done
+    
+    - name: Remove cache files
+      run: |
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/build 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/examples 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/incremental 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/v2ray-rust.d
+    
+    - name: Generate 7zip
+      run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
+    
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: v2ray-rust-${{ github.sha }}-${{ matrix.config.artifact }}.7z
+        path: v2ray-rust.7z
+        
+    - name: Get the version
+      if: github.event_name == 'release' && matrix.config.has_release
+      id: get_version
+      run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
+    
+    - name: Upload to GitHub Release
+      uses: svenstaro/upload-release-action@v2
+      if: github.event_name == 'release' && matrix.config.has_release
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: v2ray-rust.7z
+        asset_name: v2ray-rust-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}.7z
+        tag: ${{ github.ref }}
+        overwrite: true
