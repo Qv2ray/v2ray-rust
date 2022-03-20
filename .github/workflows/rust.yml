@@ -102,7 +102,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: v2ray-rust-${{ github.sha }}-${{ matrix.config.artifact }}.7z
-        path: v2ray-rust.7z
+        path: ../v2ray-rust.7z
         
     - name: Get the version
       if: github.event_name == 'release' && matrix.config.has_release
