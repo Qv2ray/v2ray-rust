@@ -39,12 +39,12 @@ jobs:
         - {
             name: "Windows-x86_64", artifact: "Windows-x86_64",
             has_release: true,
-            target_triple: x86_64-pc-windows-gnu
+            target_triple: x86_64-pc-windows
           }
         - {
             name: "Linux", artifact: "Linux-x86_64",
             has_release: true,
-            target_triple: x86_64-unknown-linux-gnu
+            target_triple: x86_64-unknown-linux
           }
         - {
             name: "macOS-x64", artifact: "macOS-x64",
