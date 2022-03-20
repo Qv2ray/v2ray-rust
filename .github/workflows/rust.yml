@@ -31,28 +31,32 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     name: '${{ matrix.config.name }}'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
       matrix:
         config:
         - {
             name: "Windows-x86_64", artifact: "Windows-x86_64",
+            os: windows-latest,
             has_release: true,
             target_triple: x86_64-pc-windows
           }
         - {
             name: "Linux", artifact: "Linux-x86_64",
+            os: ubuntu-latest,
             has_release: true,
-            target_triple: x86_64-unknown-linux
+            target_triple: x86_64-unknown-linux-gnu
           }
         - {
             name: "macOS-x64", artifact: "macOS-x64",
+            os: macos-latest,
             has_release: true,
             target_triple: x86_64-apple-darwin
           }
         - {
             name: "macOS-arm64", artifact: "macOS-arm64",
+            os: macos-latest,
             has_release: true,
             target_triple: aarch64-apple-darwin
           }
@@ -62,9 +66,6 @@ jobs:
     
     - name: Install protoc
       uses: arduino/setup-protoc@v1.1.2
-    
-    - name: Install musl
-      run: sudo apt install musl-tools
           
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
@@ -79,21 +80,16 @@ jobs:
       uses: actions-rs/cargo@v1
       with:
         command: check    
-            
-    - name: Install targer
-      run: |
-        rustup target add ${{matrix.config.target_triple}}-musl
-        rustup target add ${{matrix.config.target_triple}}-musl --toolchain=nightly
         
     - name: Build
       run: |
         mkdir build_assets
-        cargo build --verbose --release --target=${{matrix.config.target_triple}}-musl --target-dir build_assets
+        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
       
     - name: Run tests
       run: |
         mkdir build_assets_tests
-        cargo test --verbose --target=${{matrix.config.target_triple}}-musl --target-dir build_assets_tests
+        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
     
     - name: Generate 7zip
       run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
