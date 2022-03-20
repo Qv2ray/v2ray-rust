@@ -2,22 +2,71 @@ name: Rust
 
 on:
   push:
-    branches: [ main, dev ]
+    branches: 
+      - 'main'
+      - 'dev'
+    paths-ignore: 
+      -'README.md'
+      -'LICENSE'
+      
   pull_request:
-    branches: [ main, dev ]
-
-env:
-  CARGO_TERM_COLOR: always
+    branches: 
+      -'main' 
+      -'dev' 
+    paths-ignore: 
+      -'README.md'
+      -'LICENSE'
+      
+  release:
+    types: 
+      -'prereleased' 
+      -'published' 
+      -'released'
+      
+  # For test
+  workflow_dispatch:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
-
+    env:
+      CARGO_TERM_COLOR: always
+    name: '${{ matrix.config.name }}'
+    runs-on: ${{ matrix.config.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+        - {
+            name: "Windows MSVC", artifact: "Windows-MSVC",
+            os: windows-latest,
+            has_release: true,
+            target_triple: x86_64-pc-windows-msvc
+          }
+        - {
+            name: "Linux", artifact: "Linux-x86_64",
+            os: ubuntu-latest,
+            has_release: true,
+            target_triple: x86_64-unknown-linux-gnu
+          }
+        - {
+            name: "macOS-x64", artifact: "macOS-x64",
+            os: macos-latest,
+            has_release: true,
+            target_triple: x64-osx
+          }
+        - {
+            name: "macOS-arm64", artifact: "macOS-arm64",
+            os: macos-latest,
+            has_release: true,
+            target_triple: aarch64-apple-darwin
+          }
+          
     steps:
     - uses: actions/checkout@v2
+    
     - name: install protoc
-      run:  sudo apt install -y protobuf-compiler
+      uses: arduino/setup-protoc@v1.1.2
+          
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
@@ -26,12 +75,42 @@ jobs:
             components: rustfmt, clippy
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
+      
     - name: Run cargo check
       uses: actions-rs/cargo@v1
       with:
         command: check
-
+        
     - name: Build
-      run: cargo build --verbose
+      run: |
+        mkdir build_assets
+        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
+      
     - name: Run tests
-      run: cargo test --verbose
+      run: |
+        mkdir build_assets_tests
+        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
+    
+    - name: Generate 7zip
+      run: cd build_assets && 7z a ../v2ray-rust.7z -- ./build_assets
+    
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: v2ray-rust-${{ github.sha }}-${{ matrix.config.artifact }}.7z
+        path: v2ray-rust.7z
+        
+    - name: Get the version
+      if: github.event_name == 'release' && matrix.config.has_release
+      id: get_version
+      run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
+    
+    - name: Upload to GitHub Release
+      uses: svenstaro/upload-release-action@v2
+      if: github.event_name == 'release' && matrix.config.has_release
+      with:
+        repo_token: ${{ secrets.GITHUB_TOKEN }}
+        file: v2ray-rust.7z
+        asset_name: v2ray-rust-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}.7z
+        tag: ${{ github.ref }}
+        overwrite: true
