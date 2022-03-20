@@ -81,7 +81,9 @@ jobs:
         command: check    
             
     - name: Install targer
-      run: rustup target add ${{matrix.config.target_triple}}-musl
+      run: |
+        rustup target add ${{matrix.config.target_triple}}-musl
+        rustup target add ${{matrix.config.target_triple}}-musl --toolchain=nightly
         
     - name: Build
       run: |
