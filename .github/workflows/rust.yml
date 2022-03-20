@@ -92,7 +92,7 @@ jobs:
         cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
     
     - name: Generate 7zip
-      run: cd build_assets && 7z a ../v2ray-rust.7z -- ./build_assets
+      run: cd build_assets && 7z a ../v2ray-rust.7z -- ./build_assets/*
     
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3
