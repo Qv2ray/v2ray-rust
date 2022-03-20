@@ -81,18 +81,17 @@ jobs:
         command: check    
             
     - name: Install targer
-      if: matrix.config.target_triple != 'x86_64-unknown-linux-gnu'
-      run: rustup target add ${{matrix.config.target_triple}}
+      run: rustup target add ${{matrix.config.target_triple}}-musl
         
     - name: Build
       run: |
         mkdir build_assets
-        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
+        cargo build --verbose --release --target=${{matrix.config.target_triple}}-musl --target-dir build_assets
       
     - name: Run tests
       run: |
         mkdir build_assets_tests
-        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
+        cargo test --verbose --target=${{matrix.config.target_triple}}-musl --target-dir build_assets_tests
     
     - name: Generate 7zip
       run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
