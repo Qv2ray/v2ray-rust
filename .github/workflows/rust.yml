@@ -60,8 +60,11 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     
-    - name: install protoc
+    - name: Install protoc
       uses: arduino/setup-protoc@v1.1.2
+    
+    - name: Install musl
+      run: sudo apt install musl-tools
           
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
