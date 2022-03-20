@@ -31,32 +31,28 @@ jobs:
     env:
       CARGO_TERM_COLOR: always
     name: '${{ matrix.config.name }}'
-    runs-on: ${{ matrix.config.os }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         config:
         - {
             name: "Windows-x86_64", artifact: "Windows-x86_64",
-            os: windows-latest,
             has_release: true,
             target_triple: x86_64-pc-windows-gnu
           }
         - {
             name: "Linux", artifact: "Linux-x86_64",
-            os: ubuntu-latest,
             has_release: true,
             target_triple: x86_64-unknown-linux-gnu
           }
         - {
             name: "macOS-x64", artifact: "macOS-x64",
-            os: macos-latest,
             has_release: true,
             target_triple: x86_64-apple-darwin
           }
         - {
             name: "macOS-arm64", artifact: "macOS-arm64",
-            os: macos-latest,
             has_release: true,
             target_triple: aarch64-apple-darwin
           }
@@ -82,8 +78,8 @@ jobs:
         command: check    
             
     - name: Install targer
-      if: matrix.config.target_triple == 'aarch64-apple-darwin'
-      run: rustup target add aarch64-apple-darwin
+      if: matrix.config.target_triple != 'x86_64-unknown-linux-gnu'
+      run: rustup target add ${{matrix.config.target_triple}}
         
     - name: Build
       run: |
@@ -96,7 +92,7 @@ jobs:
         cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
     
     - name: Generate 7zip
-      run: 7z a v2ray-rust.7z -- ./build_assets/*
+      run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
     
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3
