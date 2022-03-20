@@ -37,10 +37,10 @@ jobs:
       matrix:
         config:
         - {
-            name: "Windows MSVC", artifact: "Windows-MSVC",
+            name: "Windows-x86_64", artifact: "Windows-x86_64",
             os: windows-latest,
             has_release: true,
-            target_triple: x86_64-pc-windows-msvc
+            target_triple: x86_64-pc-windows-gnu
           }
         - {
             name: "Linux", artifact: "Linux-x86_64",
@@ -52,7 +52,7 @@ jobs:
             name: "macOS-x64", artifact: "macOS-x64",
             os: macos-latest,
             has_release: true,
-            target_triple: x64-osx
+            target_triple: x86_64-apple-darwin
           }
         - {
             name: "macOS-arm64", artifact: "macOS-arm64",
@@ -79,7 +79,11 @@ jobs:
     - name: Run cargo check
       uses: actions-rs/cargo@v1
       with:
-        command: check
+        command: check    
+            
+    - name: Install targer
+      if: matrix.config.target_triple == 'aarch64-apple-darwin'
+      run: rustup target add aarch64-apple-darwin
         
     - name: Build
       run: |
@@ -92,7 +96,7 @@ jobs:
         cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
     
     - name: Generate 7zip
-      run: cd build_assets && 7z a ../v2ray-rust.7z -- ./build_assets/*
+      run: 7z a ../v2ray-rust.7z -- ./build_assets/*
     
     - name: Upload a Build Artifact
       uses: actions/upload-artifact@v3
