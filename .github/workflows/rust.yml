@@ -93,8 +93,8 @@ jobs:
         
     - name: Add geoip,geosite to release
       run: |
-        cp ${GITHUB_WORKSPACE}/README.md ./build_assets/README.md
-        cp ${GITHUB_WORKSPACE}/LICENSE ./build_assets/LICENSE
+        cp ${GITHUB_WORKSPACE}/README.md ./build_assets/${{matrix.config.target_triple}}/release/README.md
+        cp ${GITHUB_WORKSPACE}/LICENSE ./build_assets/${{matrix.config.target_triple}}/release/LICENSE
         LIST=('geoip geoip geoip' 'domain-list-community dlc geosite')
         for i in "${LIST[@]}"
         do
@@ -102,18 +102,18 @@ jobs:
           LASTEST_TAG="$(curl -sL "https://api.github.com/repos/v2fly/${INFO[0]}/releases" | jq -r ".[0].tag_name" || echo "latest")"
           FILE_NAME="${INFO[2]}.dat"
           echo -e "Downloading ${FILE_NAME}..."
-          curl -L "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat" -o ./build_assets/${FILE_NAME}
+          curl -L "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat" -o ./build_assets/${{matrix.config.target_triple}}/release/${FILE_NAME}
           echo -e "Verifying HASH key..."
           HASH="$(curl -sL "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat.sha256sum" | awk -F ' ' '{print $1}')"
-          [ "$(sha256sum "./build_assets/${FILE_NAME}" | awk -F ' ' '{print $1}')" == "${HASH}" ] || { echo -e "The HASH key of ${FILE_NAME} does not match cloud one."; exit 1; }
+          [ "$(sha256sum "./build_assets/${{matrix.config.target_triple}}/release/${FILE_NAME}" | awk -F ' ' '{print $1}')" == "${HASH}" ] || { echo -e "The HASH key of ${FILE_NAME} does not match cloud one."; exit 1; }
         done
     
     - name: Remove cache files
       run: |
-        rm -rf ./build_assets/build 
-        rm -rf ./build_assets/examples 
-        rm -rf ./build_assets/incremental 
-        rm -rf ./build_assets/v2ray-rust.d
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/build 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/examples 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/incremental 
+        rm -rf ./build_assets/${{matrix.config.target_triple}}/release/v2ray-rust.d
     
     - name: Generate 7zip
       run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
