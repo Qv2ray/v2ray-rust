@@ -38,9 +38,9 @@ jobs:
         config:
         - {
             name: "Windows-x86_64", artifact: "Windows-x86_64",
-            os: windows-latest,
+            os: ubuntu-latest,
             has_release: true,
-            cross: false,
+            cross: true,
             target_triple: x86_64-pc-windows
           }
         - {
@@ -52,14 +52,14 @@ jobs:
           }
         - {
             name: "macOS-x64", artifact: "macOS-x64",
-            os: macos-latest,
+            os: ubuntu-latest,
             has_release: true,
-            cross: flase,
+            cross: true,
             target_triple: x86_64-apple-darwin
           }
         - {
             name: "macOS-arm64", artifact: "macOS-arm64",
-            os: macos-latest,
+            os: ubuntu-latest,
             has_release: true,
             cross: true,
             target_triple: aarch64-apple-darwin
