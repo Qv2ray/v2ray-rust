@@ -36,30 +36,34 @@ jobs:
       fail-fast: false
       matrix:
         config:
-        #- {
-        #    name: "Windows-x86_64", artifact: "Windows-x86_64",
-        #    os: windows-latest,
-        #    has_release: true,
-        #    target_triple: x86_64-pc-windows
-        #  }
+        - {
+            name: "Windows-x86_64", artifact: "Windows-x86_64",
+            os: windows-latest,
+            has_release: true,
+            cross: false,
+            target_triple: x86_64-pc-windows
+          }
         - {
             name: "Linux", artifact: "Linux-x86_64",
             os: ubuntu-latest,
             has_release: true,
+            cross: flase,
             target_triple: x86_64-unknown-linux-gnu
           }
-        #- {
-        #    name: "macOS-x64", artifact: "macOS-x64",
-        #    os: macos-latest,
-        #    has_release: true,
-        #    target_triple: x86_64-apple-darwin
-        #  }
-        #- {
-        #    name: "macOS-arm64", artifact: "macOS-arm64",
-        #    os: macos-latest,
-        #    has_release: true,
-        #    target_triple: aarch64-apple-darwin
-        #  }
+        - {
+            name: "macOS-x64", artifact: "macOS-x64",
+            os: macos-latest,
+            has_release: true,
+            cross: flase,
+            target_triple: x86_64-apple-darwin
+          }
+        - {
+            name: "macOS-arm64", artifact: "macOS-arm64",
+            os: macos-latest,
+            has_release: true,
+            cross: true,
+            target_triple: aarch64-apple-darwin
+          }
           
     steps:
     - uses: actions/checkout@v2
@@ -70,26 +74,36 @@ jobs:
     - name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
-            toolchain: nightly
-            override: true
-            components: rustfmt, clippy
+        toolchain: nightly
+        override: true
+        components: rustfmt, clippy
+        target: ${{ matrix.config.target_triple }}
       # `cargo check` command here will use installed `nightly`
       # as it is set as an "override" for current directory
       
     - name: Run cargo check
       uses: actions-rs/cargo@v1
       with:
-        command: check    
+        command: check
         
-    - name: Build
+    - name: Prepare to build and test
       run: |
         mkdir build_assets
-        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
-      
-    - name: Run tests
-      run: |
         mkdir build_assets_tests
-        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
+        
+    - name: Build
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.config.cross }}
+        command: build
+        args: --verbose --release --target ${{ matrix.config.target_triple }} --target-dir build_assets
+    
+    - name: Test
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.config.cross }}
+        command: test
+        args: --verbose --release --target ${{ matrix.config.target_triple }} --target-dir build_assets_tests
         
     - name: Add geoip,geosite to release
       run: |
