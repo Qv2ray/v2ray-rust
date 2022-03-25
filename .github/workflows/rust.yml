@@ -36,13 +36,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-        - {
-            name: "Windows-x86_64", artifact: "Windows-x86_64",
-            os: ubuntu-latest,
-            has_release: true,
-            cross: true,
-            target_triple: x86_64-pc-windows
-          }
+        #- {
+        #    name: "Windows-x86_64", artifact: "Windows-x86_64",
+        #    os: ubuntu-latest,
+        #    has_release: true,
+        #    cross: true,
+        #    target_triple: x86_64-pc-windows
+        #  }
         - {
             name: "Linux", artifact: "Linux-x86_64",
             os: ubuntu-latest,
@@ -50,20 +50,20 @@ jobs:
             cross: flase,
             target_triple: x86_64-unknown-linux-gnu
           }
-        - {
-            name: "macOS-x64", artifact: "macOS-x64",
-            os: ubuntu-latest,
-            has_release: true,
-            cross: true,
-            target_triple: x86_64-apple-darwin
-          }
-        - {
-            name: "macOS-arm64", artifact: "macOS-arm64",
-            os: ubuntu-latest,
-            has_release: true,
-            cross: true,
-            target_triple: aarch64-apple-darwin
-          }
+        #- {
+        #    name: "macOS-x64", artifact: "macOS-x64",
+        #   os: ubuntu-latest,
+        #    has_release: true,
+        #    cross: true,
+        #    target_triple: x86_64-apple-darwin
+        #  }
+        #- {
+        #    name: "macOS-arm64", artifact: "macOS-arm64",
+        #    os: ubuntu-latest,
+        #    has_release: true,
+        #    cross: true,
+        #    target_triple: aarch64-apple-darwin
+        #  }
           
     steps:
     - uses: actions/checkout@v2
