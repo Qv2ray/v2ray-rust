@@ -39,24 +39,28 @@ jobs:
         #- {
         #    name: "Windows-x86_64", artifact: "Windows-x86_64",
         #    os: windows-latest,
+        #    cross: false,
         #    has_release: true,
         #    target_triple: x86_64-pc-windows
         #  }
         - {
             name: "Linux", artifact: "Linux-x86_64",
             os: ubuntu-latest,
+            cross: false,
             has_release: true,
             target_triple: x86_64-unknown-linux-gnu
           }
         #- {
         #    name: "macOS-x64", artifact: "macOS-x64",
         #    os: macos-latest,
+        #    cross: false,
         #    has_release: true,
         #    target_triple: x86_64-apple-darwin
         #  }
         #- {
         #    name: "macOS-arm64", artifact: "macOS-arm64",
         #    os: macos-latest,
+        #    cross: true,
         #    has_release: true,
         #    target_triple: aarch64-apple-darwin
         #  }
@@ -81,15 +85,24 @@ jobs:
       with:
         command: check    
         
-    - name: Build
+    - name: Prepare to build and test
       run: |
         mkdir build_assets
-        cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
-      
-    - name: Run tests
-      run: |
         mkdir build_assets_tests
-        cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
+        
+    - name: Build
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.config.cross }}
+        command: build
+        args: --verbose --release --target ${{ matrix.config.target_triple }} --target-dir build_assets
+
+    - name: Test
+      uses: actions-rs/cargo@v1
+      with:
+        use-cross: ${{ matrix.config.cross }}
+        command: test
+        args: --verbose --release --target ${{ matrix.config.target_triple }} --target-dir build_assets_tests
         
     - name: Add geoip,geosite to release
       run: |
