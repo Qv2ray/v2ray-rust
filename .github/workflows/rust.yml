@@ -36,62 +36,65 @@ jobs:
       fail-fast: false
       matrix:
         config:
-        #- {
-        #    name: "Windows-x86_64", artifact: "Windows-x86_64",
-        #    os: windows-latest,
-        #    has_release: true,
-        #    target_triple: x86_64-pc-windows
-        #  }
+        - {
+            name: "Windows-x86_64", artifact: "Windows-x86_64",
+            os: windows-latest,
+            has_release: true,
+            target_triple: x86_64-pc-windows-msvc
+          }
         - {
             name: "Linux", artifact: "Linux-x86_64",
             os: ubuntu-latest,
             has_release: true,
             target_triple: x86_64-unknown-linux-gnu
           }
-        #- {
-        #    name: "macOS-x64", artifact: "macOS-x64",
-        #    os: macos-latest,
-        #    has_release: true,
-        #    target_triple: x86_64-apple-darwin
-        #  }
-        #- {
-        #    name: "macOS-arm64", artifact: "macOS-arm64",
-        #    os: macos-latest,
-        #    has_release: true,
-        #    target_triple: aarch64-apple-darwin
-        #  }
+        - {
+            name: "macOS-x64", artifact: "macOS-x64",
+            os: macos-latest,
+            has_release: true,
+            target_triple: x86_64-apple-darwin
+          }
+        # - {
+        #     name: "macOS-arm64", artifact: "macOS-arm64",
+        #     os: macos-latest,
+        #     has_release: true,
+        #     target_triple: aarch64-apple-darwin
+        #   }
           
     steps:
+    - name: Set up NASM
+      uses: ilammy/setup-nasm@v1.2.1
+
     - uses: actions/checkout@v2
     
-    - name: Install protoc
-      uses: arduino/setup-protoc@v1.1.2
-          
-    - name: Install latest nightly
+    - name: Install latest stable
       uses: actions-rs/toolchain@v1
       with:
-            toolchain: nightly
+            toolchain: stable
+            target: ${{matrix.config.target_triple}}
             override: true
             components: rustfmt, clippy
-      # `cargo check` command here will use installed `nightly`
-      # as it is set as an "override" for current directory
-      
-    - name: Run cargo check
-      uses: actions-rs/cargo@v1
-      with:
-        command: check    
+
+    - name: macOS - Build preparation - Install Packages
+      if: matrix.config.os == 'macos-latest'
+      run: |
+        brew install coreutils
+
         
     - name: Build
+      shell: bash
       run: |
         mkdir build_assets
         cargo build --verbose --release --target=${{matrix.config.target_triple}} --target-dir build_assets
       
     - name: Run tests
+      shell: bash
       run: |
         mkdir build_assets_tests
         cargo test --verbose --target=${{matrix.config.target_triple}} --target-dir build_assets_tests
         
     - name: Add geoip,geosite to release
+      shell: bash
       run: |
         cp ${GITHUB_WORKSPACE}/README.md ./build_assets/${{matrix.config.target_triple}}/release/README.md
         cp ${GITHUB_WORKSPACE}/LICENSE ./build_assets/${{matrix.config.target_triple}}/release/LICENSE
@@ -109,6 +112,7 @@ jobs:
         done
     
     - name: Remove cache files
+      shell: bash
       run: |
         rm -rf ./build_assets/${{matrix.config.target_triple}}/release/build 
         rm -rf ./build_assets/${{matrix.config.target_triple}}/release/examples 
@@ -116,6 +120,7 @@ jobs:
         rm -rf ./build_assets/${{matrix.config.target_triple}}/release/v2ray-rust.d
     
     - name: Generate 7zip
+      shell: bash
       run: 7z a v2ray-rust.7z -- ./build_assets/${{matrix.config.target_triple}}/release/*
     
     - name: Upload a Build Artifact
@@ -138,3 +143,4 @@ jobs:
         asset_name: v2ray-rust-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}.7z
         tag: ${{ github.ref }}
         overwrite: true
+

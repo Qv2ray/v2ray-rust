@@ -1,9 +1,9 @@
-use protoc_rust::Customize;
+use protobuf_codegen_pure::Customize;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/config/geosite.proto");
     println!("cargo:rerun-if-changed=src/config/geoip.proto");
-    protoc_rust::Codegen::new()
+    protobuf_codegen_pure::Codegen::new()
         .out_dir("src/")
         .customize(Customize {
             expose_oneof: None,

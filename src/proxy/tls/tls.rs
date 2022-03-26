@@ -166,7 +166,7 @@ extern "C" fn decompress_ssl_cert(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(target_os = "linux", test))]
 mod tests {
     use crate::proxy::tls::tls::TlsStreamBuilder;
     use crate::proxy::ChainableStreamBuilder;
@@ -176,13 +176,9 @@ mod tests {
     use std::net::ToSocketAddrs;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
-    use webpki::DnsNameRef;
 
     use super::decompress_ssl_cert;
     fn new(sni: &str) -> io::Result<TlsStreamBuilder> {
-        let dns_name = DnsNameRef::try_from_ascii_str(sni)
-            .map_err(|e| io::Error::new(io::ErrorKind::NotFound, e.to_string()))?;
-        let dns_name = std::str::from_utf8(dns_name.as_ref()).unwrap();
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
         configuration
             .set_alpn_protos(b"\x02h2\x08http/1.1")
@@ -215,7 +211,7 @@ mod tests {
         }
         Ok(TlsStreamBuilder {
             connector: configuration.build(),
-            sni: dns_name.to_string(),
+            sni: sni.to_string(),
             verify_hostname: true,
             verify_sni: true,
         })

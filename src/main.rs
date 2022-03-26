@@ -1,7 +1,7 @@
 extern crate core;
 
 use crate::config::Config;
-use clap::{App, Arg};
+use clap::{Arg, Command};
 use log::info;
 use std::io;
 
@@ -13,7 +13,7 @@ mod proxy;
 //static ALLOC: snmalloc_rs::SnMalloc = snmalloc_rs::SnMalloc;
 
 fn main() -> io::Result<()> {
-    let matches = App::new("v2ray-rust")
+    let matches = Command::new("v2ray-rust")
         .version("v0.0.1")
         .arg(
             Arg::new("config")

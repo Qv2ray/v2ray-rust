@@ -1,15 +1,16 @@
 use crate::common::new_error;
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::{Address, AddressError};
+use bytes::Buf;
 use http::uri::PathAndQuery;
 use http::Method;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 use std::env;
+use std::io::Cursor;
 use std::path::PathBuf;
 use tokio_tungstenite::tungstenite::http::Uri;
 use uuid::Uuid;
-use webpki::DnsNameRef;
 
 pub(super) fn from_str_to_cipher_kind<'de, D>(deserializer: D) -> Result<CipherKind, D::Error>
 where
@@ -190,14 +191,101 @@ where
     EarlyDataUri::new(uri).map_err(D::Error::custom)
 }
 
+// adapted from webpki::DnsNameRef
+fn is_valid_dns_id(hostname: &[u8]) -> bool {
+    // https://blogs.msdn.microsoft.com/oldnewthing/20120412-00/?p=7873/
+    if hostname.len() > 253 {
+        return false;
+    }
+
+    let mut input = Cursor::new(hostname);
+
+    let mut label_length = 0;
+    let mut label_is_all_numeric = false;
+    let mut label_ends_with_hyphen = false;
+
+    loop {
+        const MAX_LABEL_LENGTH: usize = 63;
+        let by = if input.has_remaining() {
+            Ok(input.get_u8())
+        } else {
+            Err(new_error("eof of hostname"))
+        };
+
+        match by {
+            Ok(b'-') => {
+                if label_length == 0 {
+                    return false; // Labels must not start with a hyphen.
+                }
+                label_is_all_numeric = false;
+                label_ends_with_hyphen = true;
+                label_length += 1;
+                if label_length > MAX_LABEL_LENGTH {
+                    return false;
+                }
+            }
+
+            Ok(b'0'..=b'9') => {
+                if label_length == 0 {
+                    label_is_all_numeric = true;
+                }
+                label_ends_with_hyphen = false;
+                label_length += 1;
+                if label_length > MAX_LABEL_LENGTH {
+                    return false;
+                }
+            }
+
+            Ok(b'a'..=b'z') | Ok(b'A'..=b'Z') | Ok(b'_') => {
+                label_is_all_numeric = false;
+                label_ends_with_hyphen = false;
+                label_length += 1;
+                if label_length > MAX_LABEL_LENGTH {
+                    return false;
+                }
+            }
+
+            Ok(b'.') => {
+                if label_length == 0 {
+                    return false;
+                }
+                if label_ends_with_hyphen {
+                    return false; // Labels must not end with a hyphen.
+                }
+                label_length = 0;
+            }
+
+            _ => {
+                return false;
+            }
+        }
+
+        if !input.has_remaining() {
+            break;
+        }
+    }
+
+    if label_ends_with_hyphen {
+        return false; // Labels must not end with a hyphen.
+    }
+
+    if label_is_all_numeric {
+        return false; // Last label must not be all numeric.
+    }
+
+    true
+}
+
 pub(super) fn from_str_to_sni<'de, D>(deserializer: D) -> Result<String, D::Error>
 where
     D: Deserializer<'de>,
 {
     let sni: &str = Deserialize::deserialize(deserializer)?;
-    let dns_name = DnsNameRef::try_from_ascii_str(sni).map_err(D::Error::custom)?;
-    let res = std::str::from_utf8(dns_name.as_ref()).map_err(D::Error::custom)?;
-    Ok(res.to_owned())
+    if is_valid_dns_id(sni.as_bytes()) {
+        Ok(sni.to_owned())
+    } else {
+        Err(D::Error::custom("Not a valid sni string"))
+    }
 }
 
 pub(super) fn default_backlog() -> u32 {
@@ -214,10 +302,10 @@ pub(super) fn default_http2_method() -> http::Method {
 
 fn default_v2ray_asset_path(file_name: &str) -> PathBuf {
     let mut prefix = env::var("v2ray.location.asset")
-        .map(|e| PathBuf::from(e))
+        .map(PathBuf::from)
         .unwrap_or(
             env::var("V2RAY_LOCATION_ASSET")
-                .map(|e| PathBuf::from(e))
+                .map(PathBuf::from)
                 .unwrap_or_else(|_| {
                     let mut path_buf = std::env::current_exe().unwrap_or_default();
                     path_buf.pop();
@@ -240,6 +328,8 @@ pub(super) fn default_v2ray_geoip_path() -> PathBuf {
 mod tests {
     use crate::config::deserialize::EarlyDataUri;
 
+    use super::is_valid_dns_id;
+
     #[test]
     fn test_ws_uri() {
         let e = EarlyDataUri::new("ws://example.com/?ed=2048").unwrap();
@@ -251,5 +341,16 @@ mod tests {
         let e = EarlyDataUri::new("ws://example.com/?key=xx&ed=20488&n=q").unwrap();
         assert!(!e.early_data_header_name.is_empty());
         assert_eq!(e.max_early_data, 20488);
+    }
+
+    #[test]
+    fn test_is_valid_dns_id() {
+        assert!(!is_valid_dns_id(b"*.google.com"));
+        assert!(!is_valid_dns_id(b".google.com"));
+        assert!(is_valid_dns_id(b"google.com"));
+        assert!(!is_valid_dns_id(b"google.*.com"));
+        assert!(!is_valid_dns_id(b"google*.com"));
+        assert!(!is_valid_dns_id(b"google*sd.com"));
+        assert!(!is_valid_dns_id(b"*googlesd.com"));
     }
 }

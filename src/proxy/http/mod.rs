@@ -79,11 +79,8 @@ async fn proxy(
 }
 
 fn host_addr(uri: &http::Uri) -> Option<Address> {
-    uri.authority().and_then(|auth| {
-        Address::from_str(auth.as_str())
-            .map(Some)
-            .unwrap_or(None)
-    })
+    uri.authority()
+        .and_then(|auth| Address::from_str(auth.as_str()).map(Some).unwrap_or(None))
 }
 
 // Create a TCP connection to host:port, build a tunnel between the connection and
