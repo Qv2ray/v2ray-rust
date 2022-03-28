@@ -2,7 +2,6 @@ use crate::common::new_error;
 use crate::config::DokodemoDoor;
 use crate::proxy::Address;
 use libc::c_int;
-use log::info;
 use std::net::{SocketAddr, TcpListener};
 
 pub(crate) fn build_dokodemo_door_listener(
@@ -20,7 +19,7 @@ pub(crate) fn build_dokodemo_door_listener(
     socket.set_nonblocking(true)?;
     #[cfg(target_os = "linux")]
     {
-        info!("set tproxy to {}", door.tproxy);
+        log::info!("set tproxy to {}", door.tproxy);
         socket.set_reuse_address(true)?;
         socket.set_ip_transparent(door.tproxy)?;
     }

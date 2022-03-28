@@ -172,6 +172,7 @@ struct DomainRoutingRules {
 
 #[derive(Deserialize)]
 pub(crate) struct DokodemoDoor {
+    #[allow(dead_code)]
     #[serde(default)]
     pub tproxy: bool,
     #[serde(deserialize_with = "from_str_to_address")]
