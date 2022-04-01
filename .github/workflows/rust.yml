@@ -112,31 +112,47 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cargo build --verbose --release --target=${{matrix.config.target_triple}} 
+        cargo build --release --target=${{matrix.config.target_triple}} 
       
     - name: Run tests
       shell: bash
       run: |
-        cargo test --verbose --target=${{matrix.config.target_triple}} 
+        cargo test --release --target=${{matrix.config.target_triple}} 
         
+    - uses: robinraju/release-downloader@v1.3
+      with:
+        repository: "v2fly/geoip"
+        latest: true
+        fileName: "geoip.dat"
+
+    - uses: robinraju/release-downloader@v1.3
+      with:
+        repository: "v2fly/geoip"
+        latest: true
+        fileName: "geoip.dat.sha256sum"
+
+    - uses: robinraju/release-downloader@v1.3
+      with:
+        repository: "v2fly/domain-list-community"
+        latest: true
+        fileName: "dlc.dat.sha256sum"
+    - uses: robinraju/release-downloader@v1.3
+      with:
+        repository: "v2fly/domain-list-community"
+        latest: true
+        fileName: "dlc.dat"
+
+
     - name: Add geoip,geosite to release
       shell: bash
       run: |
         mkdir release-tmp
         cp ${GITHUB_WORKSPACE}/README.md ./release-tmp/README.md
         cp ${GITHUB_WORKSPACE}/LICENSE ./release-tmp/LICENSE
-        LIST=('geoip geoip geoip' 'domain-list-community dlc geosite')
-        for i in "${LIST[@]}"
-        do
-          INFO=($(echo $i | awk 'BEGIN{FS=" ";OFS=" "} {print $1,$2,$3}'))
-          LASTEST_TAG="$(curl -sL "https://api.github.com/repos/v2fly/${INFO[0]}/releases" | jq -r ".[0].tag_name" || echo "latest")"
-          FILE_NAME="${INFO[2]}.dat"
-          echo -e "Downloading ${FILE_NAME}..."
-          curl -L "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat" -o ./release-tmp/${FILE_NAME}
-          echo -e "Verifying HASH key..."
-          HASH="$(curl -sL "https://github.com/v2fly/${INFO[0]}/releases/download/${LASTEST_TAG}/${INFO[1]}.dat.sha256sum" | awk -F ' ' '{print $1}')"
-          [ "$(sha256sum "./release-tmp/${FILE_NAME}" | awk -F ' ' '{print $1}')" == "${HASH}" ] || { echo -e "The HASH key of ${FILE_NAME} does not match cloud one."; exit 1; }
-        done
+        cat dlc.dat.sha256sum | sha256sum --check --status
+        cat geoip.dat.sha256sum | sha256sum --check --status
+        mv dlc.dat ./release-tmp/geosite.dat
+        mv geoip.dat ./release-tmp/
         cp ./target/${{matrix.config.target_triple}}/release/v2ray-rust ./release-tmp/
     
     
