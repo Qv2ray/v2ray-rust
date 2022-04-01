@@ -15,7 +15,7 @@ tokio-util = {version="0.7.0",features=["codec","net"]}
 async-trait = "0.1"
 bitvec = "1"
 base64 = "0.13.0"
-tokio-tungstenite = {version="0.16",features=["stream"],default-features = false}
+tokio-tungstenite = {version="0.17",features=["stream"],default-features = false}
 actix-rt = "2.2.0"
 env_logger = "0.9"
 clap = "3"

@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use bytes::{Buf, Bytes};
 use tokio::io::{AsyncRead, AsyncWrite};
 
+use tokio_tungstenite::tungstenite::handshake::client::generate_key;
 use tokio_tungstenite::{client_async_with_config, tungstenite::Message, WebSocketStream};
 
 use crate::common::new_error;
@@ -162,8 +163,18 @@ impl BinaryWsStreamBuilder {
     }
 
     fn req(&self) -> Request<()> {
+        let authority = self.uri.authority().unwrap().as_str();
+        let host = authority
+            .find('@')
+            .map(|idx| authority.split_at(idx + 1).1)
+            .unwrap_or_else(|| authority);
         let mut request = Request::builder()
-            //.method("GET")
+            .method("GET")
+            .header("Host", host)
+            .header("Connection", "Upgrade")
+            .header("Upgrade", "websocket")
+            .header("Sec-WebSocket-Version", "13")
+            .header("Sec-WebSocket-Key", generate_key())
             .uri(self.uri.clone());
         for (k, v) in self.headers.iter() {
             if k != "Host" {
