@@ -242,19 +242,12 @@ impl TrojanUdpReader {
         R: AsyncRead + Unpin,
     {
         loop {
-            loop {
-                self.read_res = (self.read_at_least(r, cx, 2)); //atyp and (domain name length) Ip first byte
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, cx, 2)); //atyp and (domain name length) Ip first byte
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             self.data_length = match self.buffer[0] {
                 0x01 => 1 + 4 + 2 + 4,
@@ -270,38 +263,24 @@ impl TrojanUdpReader {
             };
             self.read_reserve(self.data_length);
             // 2. read data
-            loop {
-                self.read_res = (self.read_at_least(r, cx, self.data_length));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, cx, self.data_length));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             self.addr = Address::read_from_buf(&self.buffer)?;
             self.buffer.advance(self.addr.serialized_len());
             self.data_length = self.buffer.get_u16() as usize;
             self.buffer.advance(2); // 0D0A (2bytes)
             self.read_reserve(self.data_length);
-            loop {
-                self.read_res = (self.read_at_least(r, cx, self.data_length));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, cx, self.data_length));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             // 3. we have read adequate data
             while self.calc_data_to_put(dst) != 0 {
@@ -398,13 +377,7 @@ impl TrojanUdpWriter {
             addr.write_to_buf(&mut self.buffer);
             self.buffer.put_u16(data.len() as u16);
             self.buffer.put_slice(b"\r\n");
-            loop {
-                self.write_res = self.write_buffer_data(w, cx);
-                if self.write_res.is_ready() {
-                    break;
-                }
-                co_yield(Poll::Pending);
-            }
+            self.write_res = co_await(self.write_buffer_data(w, cx));
             self.pos = 0;
             self.buffer.clear();
             loop {

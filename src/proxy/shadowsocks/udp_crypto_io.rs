@@ -310,14 +310,11 @@ impl<T: UdpWrite + Unpin> ShadowSocksUdpStream<T> {
                 addr
             );
             debug_log!("poll sendto {}, before addr:{}", self.addr, addr);
-            loop {
-                self.write_res =
-                    Pin::new(&mut self.stream).poll_send_to(cx, &self.write_buffer, &self.addr);
-                if self.write_res.is_ready() {
-                    break;
-                }
-                co_yield(Poll::Pending);
-            }
+            self.write_res = co_await(Pin::new(&mut self.stream).poll_send_to(
+                cx,
+                &self.write_buffer,
+                &self.addr,
+            ));
             self.write_buffer.clear();
             co_yield(std::mem::replace(&mut self.write_res, Poll::Pending));
         }

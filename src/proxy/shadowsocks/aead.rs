@@ -60,19 +60,12 @@ impl DecryptedReader {
         R: AsyncRead + Unpin,
     {
         loop {
-            loop {
-                self.read_res = (self.read_at_least(r, ctx, self.tag_size + 2));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, self.tag_size + 2));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             self.data_length = DecryptedReader::decrypt_length(
                 &mut self.cipher,
@@ -80,19 +73,12 @@ impl DecryptedReader {
             )? + self.tag_size;
             self.buffer.advance(self.tag_size + 2);
             self.read_reserve(self.data_length);
-            loop {
-                self.read_res = (self.read_at_least(r, ctx, self.data_length));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, self.data_length));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             if !self
                 .cipher
@@ -183,13 +169,7 @@ impl EncryptedWriter {
                 .reserve(minimal_data_to_write + 2 + self.tag_size * 2);
             data = &data[..minimal_data_to_write];
             self.encrypted_buffer(data);
-            loop {
-                self.write_res = self.write_data(w, ctx);
-                if self.write_res.is_ready() {
-                    break;
-                }
-                co_yield(Poll::Pending);
-            }
+            self.write_res = co_await(self.write_data(w, ctx));
             self.buf.clear();
             co_yield(std::mem::replace(&mut self.write_res, Poll::Pending));
         }

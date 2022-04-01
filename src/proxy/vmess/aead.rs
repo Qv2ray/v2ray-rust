@@ -86,14 +86,7 @@ impl VmessAeadWriter {
             let data = &data[..minimal_data_to_write];
             debug_log!("vmess: before encrypted data len:{}", data.len());
             self.encrypted_buffer(data);
-            loop {
-                self.write_res = self.write_data(w, ctx);
-                if self.write_res.is_ready() {
-                    break;
-                }
-                debug_log!("vmess: write data pending");
-                co_yield(Poll::Pending);
-            }
+            self.write_res = co_await(self.write_data(w, ctx));
             self.buffer.clear();
             debug_log!(
                 "vmess: write data done,last writen len:{}",
@@ -238,19 +231,12 @@ impl VmessAeadReader {
                 self.count,
                 self.buffer.len()
             );
-            loop {
-                self.read_res = (self.read_at_least(r, ctx, 2));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, 2));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             self.data_length = self.buffer.get_u16() as usize;
             if self.data_length > MAX_SIZE {
@@ -259,19 +245,12 @@ impl VmessAeadReader {
             }
             self.read_reserve(self.data_length);
             // 2. read data
-            loop {
-                self.read_res = (self.read_at_least(r, ctx, self.data_length));
-                if self.read_res.is_pending() {
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, self.data_length));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             // 3. construct nonce
             self.nonce[0..2].copy_from_slice(&self.count.to_be_bytes());

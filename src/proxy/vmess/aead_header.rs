@@ -165,22 +165,13 @@ impl VmessHeaderReader {
     {
         loop {
             // 1. read length
-            loop {
-                debug_log!("vmess: try aead header read length");
-                self.read_res = (self.read_at_least(r, ctx, 18));
-                if self.read_res.is_pending() {
-                    debug_log!("vmess: aead header reading");
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, 18));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    debug_log!("vmess: aead header read length error");
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                debug_log!("vmess: aead header read length error");
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             let aad = [0u8; 0];
             debug_log!("vmess: try aead header decrypt len");
@@ -201,21 +192,13 @@ impl VmessHeaderReader {
                 "vmess: try aead header read data, buffer len:{}",
                 self.buffer.len()
             );
-            loop {
-                self.read_res = (self.read_at_least(r, ctx, self.data_length + 16));
-                if self.read_res.is_pending() {
-                    debug_log!("vmess: aead header data reading");
-                    co_yield(Poll::Pending);
-                    continue;
+            self.read_res = co_await(self.read_at_least(r, ctx, self.data_length + 16));
+            if self.read_res.is_error() {
+                if self.read_zero {
+                    return Poll::Ready(Ok(()));
                 }
-                if self.read_res.is_error() {
-                    if self.read_zero {
-                        return Poll::Ready(Ok(()));
-                    }
-                    debug_log!("vmess: aead header read data error");
-                    return std::mem::replace(&mut self.read_res, Poll::Pending);
-                }
-                break;
+                debug_log!("vmess: aead header read data error");
+                return std::mem::replace(&mut self.read_res, Poll::Pending);
             }
             debug_log!("vmess: try aead header decrypt data");
             let aad = [0u8; 0];
