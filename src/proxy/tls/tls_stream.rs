@@ -130,7 +130,7 @@ impl ChainableStreamBuilder for TlsStreamBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::TLS
+        ProtocolType::Tls
     }
 }
 
@@ -145,7 +145,7 @@ extern "C" fn decompress_ssl_cert(
         let mut buf: *mut u8 = std::ptr::null_mut();
         let x: *mut *mut u8 = &mut buf;
         let allocated_buffer = boring_sys::CRYPTO_BUFFER_alloc(x, uncompressed_len);
-        if buf == std::ptr::null_mut() {
+        if buf.is_null() {
             return 0;
         }
         let uncompressed_len_ptr: *mut usize = &mut uncompressed_len;
@@ -168,7 +168,7 @@ extern "C" fn decompress_ssl_cert(
 
 #[cfg(all(target_os = "linux", test))]
 mod tests {
-    use crate::proxy::tls::tls::TlsStreamBuilder;
+    use crate::proxy::tls::tls_stream::TlsStreamBuilder;
     use crate::proxy::ChainableStreamBuilder;
     use boring::ssl::SslMethod;
     use boring::ssl::{SslConnector, SslSignatureAlgorithm};

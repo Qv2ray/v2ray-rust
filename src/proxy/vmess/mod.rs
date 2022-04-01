@@ -1,6 +1,6 @@
 use crate::debug_log;
-use crate::proxy::vmess::vmess::VmessStream;
 use crate::proxy::vmess::vmess_option::VmessOption;
+use crate::proxy::vmess::vmess_stream::VmessStream;
 use crate::proxy::{
     Address, BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType,
 };
@@ -11,8 +11,8 @@ mod aead;
 mod aead_header;
 mod chunk;
 mod kdf;
-pub mod vmess;
 pub mod vmess_option;
+pub mod vmess_stream;
 
 #[derive(Clone)]
 pub struct VmessBuilder {
@@ -46,7 +46,7 @@ impl ChainableStreamBuilder for VmessBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::VMESS
+        ProtocolType::Vmess
     }
 
     fn get_addr(&self) -> Option<Address> {

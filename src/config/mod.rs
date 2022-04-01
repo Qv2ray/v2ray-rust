@@ -239,13 +239,13 @@ impl std::ops::Index<(ProtocolType, usize)> for Config {
     fn index(&self, index: (ProtocolType, usize)) -> &Self::Output {
         match index.0 {
             ProtocolType::SS => &self.ss[index.1],
-            ProtocolType::TLS => &self.tls[index.1],
-            ProtocolType::VMESS => &self.vmess[index.1],
+            ProtocolType::Tls => &self.tls[index.1],
+            ProtocolType::Vmess => &self.vmess[index.1],
             ProtocolType::WS => &self.ws[index.1],
-            ProtocolType::TROJAN => &self.trojan[index.1],
-            ProtocolType::DIRECT => &self.direct[index.1],
+            ProtocolType::Trojan => &self.trojan[index.1],
+            ProtocolType::Direct => &self.direct[index.1],
             ProtocolType::H2 => &self.h2[index.1],
-            ProtocolType::BLACKHOLE => &self.blackhole[index.1],
+            ProtocolType::Blackhole => &self.blackhole[index.1],
         }
     }
 }
@@ -301,7 +301,7 @@ impl Config {
             out.chain.iter().for_each(|t| {
                 if let Some((p, idx)) = config_map.get(t.as_str()) {
                     match *p {
-                        ProtocolType::TROJAN | ProtocolType::SS | ProtocolType::VMESS => {
+                        ProtocolType::Trojan | ProtocolType::SS | ProtocolType::Vmess => {
                             let next_addr = addr_iter.next();
                             if next_addr.is_none() {
                                 builder.push_last_builder(self[(*p, *idx)].clone_box());

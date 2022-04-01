@@ -29,6 +29,6 @@ impl ChainableStreamBuilder for DirectStreamBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::DIRECT
+        ProtocolType::Direct
     }
 }

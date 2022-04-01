@@ -29,6 +29,6 @@ impl ChainableStreamBuilder for BlackHoleStreamBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::BLACKHOLE
+        ProtocolType::Blackhole
     }
 }

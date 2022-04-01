@@ -3,14 +3,14 @@ use crate::proxy::{ChainableStreamBuilder, ProtocolType};
 use gentian::gentian;
 
 pub(super) struct ChainStreamBuilderProtocolTypeIter<'a> {
-    builders: &'a Vec<Box<dyn ChainableStreamBuilder>>,
+    builders: &'a [Box<dyn ChainableStreamBuilder>],
     ty: Option<ProtocolType>,
     pos: usize,
     state: u32,
 }
 impl<'a> ChainStreamBuilderProtocolTypeIter<'a> {
     pub(super) fn new(
-        builders: &'a Vec<Box<dyn ChainableStreamBuilder>>,
+        builders: &'a [Box<dyn ChainableStreamBuilder>],
         last_builder: &'a Option<Box<dyn ToChainableStreamBuilder>>,
     ) -> Self {
         let mut ty = None;

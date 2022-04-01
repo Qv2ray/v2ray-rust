@@ -46,7 +46,7 @@ impl RouterBuilder {
         }
     }
 
-    pub fn add_cidr_rules(&mut self, outbound_tag: &str, ip_rules: &Vec<String>) {
+    pub fn add_cidr_rules(&mut self, outbound_tag: &str, ip_rules: &[String]) {
         for rule in ip_rules {
             if IpCidr::is_ip_cidr(rule) {
                 let cidr = IpCidr::from_str(rule).unwrap();

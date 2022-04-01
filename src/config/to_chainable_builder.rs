@@ -6,7 +6,7 @@ use crate::proxy::blackhole::BlackHoleStreamBuilder;
 use crate::proxy::direct::DirectStreamBuilder;
 use crate::proxy::h2::Http2StreamBuilder;
 use crate::proxy::shadowsocks::ShadowsocksBuilder;
-use crate::proxy::tls::tls::TlsStreamBuilder;
+use crate::proxy::tls::TlsStreamBuilder;
 use crate::proxy::trojan::TrojanStreamBuilder;
 use crate::proxy::vmess::vmess_option::VmessOption;
 use crate::proxy::vmess::VmessBuilder;
@@ -54,7 +54,7 @@ impl ToChainableStreamBuilder for VmessConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::VMESS
+        ProtocolType::Vmess
     }
 
     fn get_addr(&self) -> Option<Address> {
@@ -81,7 +81,7 @@ impl ToChainableStreamBuilder for TrojanConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::TROJAN
+        ProtocolType::Trojan
     }
 
     fn get_addr(&self) -> Option<Address> {
@@ -109,7 +109,7 @@ impl ToChainableStreamBuilder for TlsConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::TLS
+        ProtocolType::Tls
     }
 }
 
@@ -173,7 +173,7 @@ impl ToChainableStreamBuilder for BlackHoleConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::BLACKHOLE
+        ProtocolType::Blackhole
     }
 }
 impl ToChainableStreamBuilder for DirectConfig {
@@ -193,7 +193,7 @@ impl ToChainableStreamBuilder for DirectConfig {
     }
 
     fn get_protocol_type(&self) -> ProtocolType {
-        ProtocolType::DIRECT
+        ProtocolType::Direct
     }
 }
 impl ToChainableStreamBuilder for ShadowsocksConfig {

@@ -62,21 +62,18 @@ macro_rules! debug_log {
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum ProtocolType {
     SS,
-    TLS,
-    VMESS,
+    Tls,
+    Vmess,
     WS,
-    TROJAN,
-    DIRECT,
+    Trojan,
+    Direct,
     H2,
-    BLACKHOLE,
+    Blackhole,
 }
 
 impl ProtocolType {
     pub fn is_uot(&self) -> bool {
-        match self {
-            ProtocolType::VMESS | ProtocolType::TROJAN => true,
-            _ => false,
-        }
+        matches!(self, ProtocolType::Vmess | ProtocolType::Trojan)
     }
 }
 
@@ -188,7 +185,7 @@ impl ChainStreamBuilder {
 
     pub fn build_inner_markers(&mut self) {
         let mut iter = ChainStreamBuilderProtocolTypeIter::new(&self.builders, &self.last_builder);
-        self.is_black_hole = iter.any(|x| x == ProtocolType::BLACKHOLE);
+        self.is_black_hole = iter.any(|x| x == ProtocolType::Blackhole);
 
         let iter = ChainStreamBuilderProtocolTypeIter::new(&self.builders, &self.last_builder);
         build_udp_marker_impl(&mut self.build_udp_marker, iter);
@@ -322,7 +319,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::proxy::ProtocolType::{SS, TROJAN, VMESS, WS};
+    use crate::proxy::ProtocolType::{Trojan, Vmess, SS, WS};
     use crate::proxy::{build_udp_marker_impl, ProtocolType};
     use bitvec::vec::BitVec;
 
@@ -353,19 +350,19 @@ mod tests {
         // ws vmess ss: T F F
         // ws vmess ss ss: T F F F
         // trojan ws vmess : T T F
-        let type1 = vec![WS, VMESS, SS];
+        let type1 = vec![WS, Vmess, SS];
         let b1 = vec![true, false, false];
         assert!(test_eq_bit_vec(
             from_protocol_type_to_udp_marker_bit_vec(type1.into_iter().rev()),
             b1
         ));
-        let type2 = vec![WS, VMESS, SS, SS];
+        let type2 = vec![WS, Vmess, SS, SS];
         let b2 = vec![true, false, false, false];
         assert!(test_eq_bit_vec(
             from_protocol_type_to_udp_marker_bit_vec(type2.into_iter().rev()),
             b2,
         ));
-        let type3 = vec![TROJAN, WS, VMESS];
+        let type3 = vec![Trojan, WS, Vmess];
         let b3 = vec![true, true, false];
         assert!(test_eq_bit_vec(
             from_protocol_type_to_udp_marker_bit_vec(type3.into_iter().rev()),

@@ -89,7 +89,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                 } else {
                     let username = Bytes::copy_from_slice(username);
                     match self.authed_users.get(&username) {
-                        Some(saved_pass) if saved_pass == &password => {
+                        Some(saved_pass) if saved_pass == password => {
                             let response = [1, response_code::SUCCESS];
                             self.stream.write_all(&response).await?;
                         }

@@ -1,14 +1,14 @@
 use crate::common::sha224;
-use crate::proxy::trojan::trojan::RequestHeader;
+use crate::proxy::trojan::trojan_stream::RequestHeader;
 use crate::proxy::{
     Address, BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType,
 };
 use async_trait::async_trait;
 use std::io;
 
-use self::trojan::TrojanUdpStream;
+use self::trojan_stream::TrojanUdpStream;
 
-mod trojan;
+mod trojan_stream;
 
 const HEX_CHARS_LOWER: &[u8; 16] = b"0123456789abcdef";
 
@@ -60,7 +60,7 @@ impl ChainableStreamBuilder for TrojanStreamBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::TROJAN
+        ProtocolType::Trojan
     }
 
     fn get_addr(&self) -> Option<Address> {

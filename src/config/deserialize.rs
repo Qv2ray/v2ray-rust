@@ -302,17 +302,15 @@ pub(super) fn default_http2_method() -> http::Method {
 
 fn default_v2ray_asset_path(file_name: &str) -> PathBuf {
     let mut prefix = env::var("v2ray.location.asset")
+        .or_else(|_| env::var("V2RAY_LOCATION_ASSET"))
         .map(PathBuf::from)
-        .unwrap_or(
-            env::var("V2RAY_LOCATION_ASSET")
-                .map(PathBuf::from)
-                .unwrap_or_else(|_| {
-                    let mut path_buf = std::env::current_exe().unwrap_or_default();
-                    path_buf.pop();
-                    path_buf
-                }),
-        );
+        .unwrap_or_else(|_| {
+            let mut path_buf = std::env::current_exe().unwrap_or_default();
+            path_buf.pop();
+            path_buf
+        });
     prefix.push(file_name);
+    log::trace!("v2ray asset location: {}", prefix.display());
     prefix
 }
 

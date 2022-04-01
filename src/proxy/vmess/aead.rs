@@ -3,7 +3,7 @@ use crate::common::net::PollUtil;
 use crate::common::LW_BUFFER_SIZE;
 #[allow(unused_imports)]
 use crate::proxy::show_utf8_lossy;
-use crate::proxy::vmess::vmess::{CHUNK_SIZE, MAX_SIZE};
+use crate::proxy::vmess::vmess_stream::{CHUNK_SIZE, MAX_SIZE};
 use crate::{debug_log, impl_read_utils};
 use aes_gcm::Aes128Gcm;
 use bytes::{Buf, BufMut, BytesMut};
