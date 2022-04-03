@@ -1,4 +1,6 @@
 default_outbound = "cn"
+enable_api_server = true
+api_server_addr = "127.0.0.1:1999"
 
 [[ss]]
 addr = "127.0.0.1:9000"
@@ -69,6 +71,7 @@ tag = "private"
 [[inbounds]]
 addr = "127.0.0.1:1087"
 enable_udp = true
+tag = "mixed"
 
 # [[dokodemo]]
 # addr = "127.0.0.1:12345"

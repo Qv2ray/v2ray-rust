@@ -294,6 +294,10 @@ pub(super) fn default_backlog() -> u32 {
 pub(super) fn default_true() -> bool {
     true
 }
+pub(super) fn default_random_string() -> String {
+    let id = Uuid::new_v4();
+    id.to_string()
+}
 
 #[inline]
 pub(super) fn default_http2_method() -> http::Method {

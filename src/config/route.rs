@@ -5,7 +5,7 @@ use domain_matcher::mph::MphMatcher;
 use domain_matcher::DomainMatcher;
 use domain_matcher::MatchType;
 
-use crate::config::{geoip, geosite};
+use crate::config::{geoip, geosite, DomainRoutingRules, GeoIpRules, GeoSiteRules, IpRoutingRules};
 use crate::debug_log;
 use bytes::Buf;
 use cidr_utils::cidr::IpCidr;
@@ -390,4 +390,67 @@ impl Router {
         }
         self.default_outbound_tag.as_str()
     }
+}
+
+pub(super) fn build_router(
+    vec_domain_routing_rules: Vec<DomainRoutingRules>,
+    vec_ip_routing_rules: Vec<IpRoutingRules>,
+    vec_geosite_rules: Vec<GeoSiteRules>,
+    vec_geoip_rules: Vec<GeoIpRules>,
+    default_outbound_tag: String,
+) -> io::Result<Router> {
+    let mut builder = RouterBuilder::new();
+    for domain_routing_rules in vec_domain_routing_rules {
+        let use_mph = domain_routing_rules.use_mph;
+        for full in domain_routing_rules.full_rules {
+            builder.add_domain_rules(
+                full.as_str(),
+                domain_routing_rules.tag.as_str(),
+                MatchType::Full(true),
+                use_mph,
+            );
+        }
+        for domain in domain_routing_rules.domain_rules {
+            builder.add_domain_rules(
+                domain.as_str(),
+                domain_routing_rules.tag.as_str(),
+                MatchType::Domain(true),
+                use_mph,
+            );
+        }
+        for substr in domain_routing_rules.substr_rules {
+            builder.add_domain_rules(
+                substr.as_str(),
+                domain_routing_rules.tag.as_str(),
+                MatchType::SubStr(true),
+                use_mph,
+            );
+        }
+        builder.add_regex_rules(
+            domain_routing_rules.tag.as_str(),
+            domain_routing_rules.regex_rules,
+        );
+    }
+    for cidr_rules in vec_ip_routing_rules {
+        builder.add_cidr_rules(cidr_rules.tag.as_str(), &cidr_rules.cidr_rules);
+    }
+    for geosite_rule in vec_geosite_rules {
+        let mut geosite_tag_map = HashMap::new();
+        for rule in geosite_rule.rules {
+            geosite_tag_map.insert(rule.to_uppercase(), geosite_rule.tag.as_str());
+        }
+        builder.read_geosite_file(
+            geosite_rule.file_path,
+            geosite_tag_map,
+            geosite_rule.use_mph,
+        )?;
+    }
+    for geoip_rule in vec_geoip_rules {
+        builder.read_geoip_file(
+            geoip_rule.file_path,
+            geoip_rule.tag.as_str(),
+            geoip_rule.rules,
+        )?;
+    }
+    builder.build(default_outbound_tag)
 }

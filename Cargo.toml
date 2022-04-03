@@ -11,6 +11,8 @@ default = []
 strict-vmess-udp = []
 
 [dependencies]
+tonic = "0.7"
+prost = "0.10"
 tokio-util = {version="0.7.0",features=["codec","net"]}
 async-trait = "0.1"
 bitvec = "1"
@@ -42,7 +44,7 @@ chacha20poly1305 = "0.9.0"
 aes = "0.7.5"
 sha2 = "0.10.1"
 md-5 = "0.10.0"
-uuid = { version="0.8", features=["std"]}
+uuid = { version="0.8", features=["std","v4"]}
 aead = "0.4.3"
 generic-array = "0.14.5"
 hmac = "0.12.0"
@@ -71,3 +73,4 @@ codegen-units = 1
 
 [build-dependencies]
 protobuf-codegen-pure = "2.27.1"
+tonic-build = "0.7"

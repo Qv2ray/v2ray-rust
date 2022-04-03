@@ -3,36 +3,29 @@ mod geoip;
 mod geosite;
 mod ip_trie;
 mod route;
+mod server_builder;
 mod to_chainable_builder;
 
 pub use route::Router;
+pub use server_builder::{ConfigServerBuilder, COUNTER_MAP};
 pub use to_chainable_builder::ToChainableStreamBuilder;
 
-use crate::common::net::relay;
 use crate::common::new_error;
 use crate::config::deserialize::{
-    default_backlog, default_http2_method, default_true, default_v2ray_geoip_path,
-    default_v2ray_geosite_path, from_str_to_address, from_str_to_cipher_kind,
-    from_str_to_http_method, from_str_to_option_address, from_str_to_path,
+    default_backlog, default_http2_method, default_random_string, default_true,
+    default_v2ray_geoip_path, default_v2ray_geosite_path, from_str_to_address,
+    from_str_to_cipher_kind, from_str_to_http_method, from_str_to_option_address, from_str_to_path,
     from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
 
-use crate::proxy::socks::socks5::{Socks5Stream, Socks5UdpDatagram};
-
 use crate::proxy::{Address, ChainStreamBuilder, ProtocolType};
-use actix_server::Server;
-use actix_service::fn_service;
 
 use serde::Deserialize;
 
-use std::net::SocketAddr;
+use crate::config::route::build_router;
 
-use crate::config::route::RouterBuilder;
-
-use domain_matcher::MatchType;
-use log::info;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
@@ -40,11 +33,6 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use tokio::net::TcpStream;
-
-use crate::proxy::dokodemo_door::build_dokodemo_door_listener;
-use crate::proxy::http::serve_http_conn;
-use crate::proxy::socks::SOCKS_VERSION;
 use uuid::Uuid;
 static SS_LOCAL_SHARED_CONTEXT: once_cell::sync::Lazy<SharedBloomContext> =
     once_cell::sync::Lazy::new(|| Arc::new(BloomContext::new(true)));
@@ -129,6 +117,8 @@ struct Inbounds {
     addr: Address,
     #[serde(default)]
     enable_udp: bool,
+    #[serde(default = "default_random_string")]
+    tag: String,
 }
 
 #[derive(Deserialize)]
@@ -198,6 +188,11 @@ struct Http2Config {
 
 #[derive(Deserialize)]
 pub struct Config {
+    #[serde(default)]
+    enable_api_server: bool,
+    #[serde(deserialize_with = "from_str_to_address", default)]
+    api_server_addr: Address,
+
     #[serde(default = "default_backlog")]
     backlog: u32,
     #[serde(default)]
@@ -337,176 +332,14 @@ impl Config {
             std::mem::take(&mut self.geoip_rules),
             default_outbound_tag.to_string(),
         )?;
-        Ok(ConfigServerBuilder {
-            backlog: self.backlog,
-            inbounds: std::mem::take(&mut self.inbounds),
-            dokodemo: std::mem::take(&mut self.dokodemo),
-            router: Arc::new(router),
-            inner_map: Arc::new(inner_map),
-        })
+        Ok(ConfigServerBuilder::new(
+            self.backlog,
+            std::mem::take(&mut self.inbounds),
+            std::mem::take(&mut self.dokodemo),
+            Arc::new(router),
+            Arc::new(inner_map),
+            self.enable_api_server,
+            self.api_server_addr,
+        ))
     }
-}
-
-pub struct ConfigServerBuilder {
-    backlog: u32,
-    inbounds: Vec<Inbounds>,
-    dokodemo: Vec<DokodemoDoor>,
-    router: Arc<Router>,
-    inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
-}
-
-impl ConfigServerBuilder {
-    pub fn run(mut self) -> io::Result<()> {
-        let router = (&self.router).clone();
-        let inner_map = (&self.inner_map).clone();
-        {
-            actix_rt::System::new().block_on(async move {
-                let mut server = Server::build();
-                server = server.backlog(self.backlog);
-                info!("backlog is:{}", self.backlog);
-                for door in self.dokodemo.iter_mut() {
-                    let inner_map = inner_map.clone();
-                    let router = router.clone();
-                    let target_addr = door.target_addr.take();
-                    let std_listener = build_dokodemo_door_listener(door, self.backlog)?;
-                    server = server.listen("dokodemo", std_listener, move || {
-                        let target_addr = target_addr.clone();
-                        let inner_map = inner_map.clone();
-                        let router = router.clone();
-                        fn_service(move |io: TcpStream| {
-                            let target_addr = target_addr.clone();
-                            let inner_map = inner_map.clone();
-                            let router = router.clone();
-                            async move {
-                                let dokodemo_door_addr = io.local_addr()?;
-                                if let Some(addr) = target_addr {
-                                    let out_stream = addr.connect_tcp().await?;
-                                    return relay(io, out_stream).await;
-                                }
-                                let stream_builder;
-                                {
-                                    let ob = router.match_socket_addr(&dokodemo_door_addr);
-                                    info!(
-                                        "routing dokodemo addr {} to outbound:{}",
-                                        dokodemo_door_addr, ob
-                                    );
-                                    stream_builder = inner_map.get(ob).unwrap();
-                                }
-                                let out_stream =
-                                    stream_builder.build_tcp(dokodemo_door_addr.into()).await?;
-                                return relay(io, out_stream).await;
-                            }
-                        })
-                    })?;
-                }
-                for inbound in self.inbounds.into_iter() {
-                    let inner_map_1 = inner_map.clone();
-                    let router_1 = router.clone();
-                    let enable_udp = inbound.enable_udp;
-
-                    server = server.bind("in", inbound.addr.to_string(), move || {
-                        let inner_map = inner_map_1.clone();
-                        let router = router_1.clone();
-                        fn_service(move |io: TcpStream| {
-                            let inner_map = inner_map.clone();
-                            let router = router.clone();
-                            async move {
-                                let mut header = [0u8; 1];
-                                io.peek(&mut header).await?;
-                                if header[0] != SOCKS_VERSION {
-                                    return serve_http_conn(io, inner_map, router).await;
-                                }
-                                let peer_ip = io.peer_addr()?.ip();
-                                let addr = if enable_udp {
-                                    Some(SocketAddr::new(peer_ip, 0))
-                                } else {
-                                    None
-                                };
-                                let stream = Socks5Stream::new(io);
-                                let mut udp_socket = None;
-                                let x = stream.init(addr, &mut udp_socket).await?;
-                                if let Some(udp_socket) = udp_socket {
-                                    Socks5UdpDatagram::run(udp_socket, router, inner_map, x.0)
-                                        .await?;
-                                    return Ok(());
-                                }
-                                let stream_builder;
-                                {
-                                    let ob = router.match_addr(&x.1);
-                                    info!("routing {} to outbound:{}", x.1, ob);
-                                    stream_builder = inner_map.get(ob).unwrap();
-                                }
-                                let out_stream = stream_builder.build_tcp(x.1).await?;
-                                return relay(x.0, out_stream).await;
-                            }
-                        })
-                    })?;
-                }
-                server.run().await
-            })
-        }
-    }
-}
-
-fn build_router(
-    vec_domain_routing_rules: Vec<DomainRoutingRules>,
-    vec_ip_routing_rules: Vec<IpRoutingRules>,
-    vec_geosite_rules: Vec<GeoSiteRules>,
-    vec_geoip_rules: Vec<GeoIpRules>,
-    default_outbound_tag: String,
-) -> io::Result<Router> {
-    let mut builder = RouterBuilder::new();
-    for domain_routing_rules in vec_domain_routing_rules {
-        let use_mph = domain_routing_rules.use_mph;
-        for full in domain_routing_rules.full_rules {
-            builder.add_domain_rules(
-                full.as_str(),
-                domain_routing_rules.tag.as_str(),
-                MatchType::Full(true),
-                use_mph,
-            );
-        }
-        for domain in domain_routing_rules.domain_rules {
-            builder.add_domain_rules(
-                domain.as_str(),
-                domain_routing_rules.tag.as_str(),
-                MatchType::Domain(true),
-                use_mph,
-            );
-        }
-        for substr in domain_routing_rules.substr_rules {
-            builder.add_domain_rules(
-                substr.as_str(),
-                domain_routing_rules.tag.as_str(),
-                MatchType::SubStr(true),
-                use_mph,
-            );
-        }
-        builder.add_regex_rules(
-            domain_routing_rules.tag.as_str(),
-            domain_routing_rules.regex_rules,
-        );
-    }
-    for cidr_rules in vec_ip_routing_rules {
-        builder.add_cidr_rules(cidr_rules.tag.as_str(), &cidr_rules.cidr_rules);
-    }
-    for geosite_rule in vec_geosite_rules {
-        let mut geosite_tag_map = HashMap::new();
-        for rule in geosite_rule.rules {
-            geosite_tag_map.insert(rule.to_uppercase(), geosite_rule.tag.as_str());
-        }
-        builder.read_geosite_file(
-            geosite_rule.file_path,
-            geosite_tag_map,
-            geosite_rule.use_mph,
-        )?;
-    }
-    for geoip_rule in vec_geoip_rules {
-        builder.read_geoip_file(
-            geoip_rule.file_path,
-            geoip_rule.tag.as_str(),
-            geoip_rule.rules,
-        )?;
-    }
-    builder.build(default_outbound_tag)
 }

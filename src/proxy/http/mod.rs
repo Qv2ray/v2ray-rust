@@ -2,12 +2,13 @@ use hyper::server::conn::Http;
 use std::collections::HashMap;
 use std::io;
 use std::str::FromStr;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 
-use crate::common::net::relay;
+use crate::common::net::{relay, relay_with_atomic_counter};
 use crate::common::new_error;
-use crate::config::Router;
+use crate::config::{Router, COUNTER_MAP};
 use crate::debug_log;
 use crate::proxy::{Address, ChainStreamBuilder};
 use hyper::service::service_fn;
@@ -19,6 +20,9 @@ pub async fn serve_http_conn(
     io: TcpStream,
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
+    enable_api_server: bool,
+    in_counter_up: Option<&'static AtomicU64>,
+    in_counter_down: Option<&'static AtomicU64>,
 ) -> io::Result<()> {
     let mut http_conn = Http::new();
     http_conn
@@ -30,7 +34,17 @@ pub async fn serve_http_conn(
             service_fn(|req| {
                 let inner_map = inner_map.clone();
                 let router = router.clone();
-                async move { proxy(req, inner_map, router).await }
+                async move {
+                    proxy(
+                        req,
+                        inner_map,
+                        router,
+                        enable_api_server,
+                        in_counter_up,
+                        in_counter_down,
+                    )
+                    .await
+                }
             }),
         )
         .with_upgrades();
@@ -44,6 +58,10 @@ async fn proxy(
     req: Request<Body>,
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
+
+    enable_api_server: bool,
+    in_counter_up: Option<&'static AtomicU64>,
+    in_counter_down: Option<&'static AtomicU64>,
 ) -> Result<Response<Body>, hyper::Error> {
     debug_log!("http proxy server req: {:?}", req);
 
@@ -54,7 +72,17 @@ async fn proxy(
                 let router = router;
                 match hyper::upgrade::on(req).await {
                     Ok(upgraded) => {
-                        if let Err(e) = tunnel(upgraded, addr, inner_map, router).await {
+                        if let Err(e) = tunnel(
+                            upgraded,
+                            addr,
+                            inner_map,
+                            router,
+                            enable_api_server,
+                            in_counter_up,
+                            in_counter_down,
+                        )
+                        .await
+                        {
                             log::error!("http tunnel error: {}", e);
                         };
                     }
@@ -90,18 +118,34 @@ async fn tunnel(
     addr: Address,
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
+    enable_api_server: bool,
+    in_counter_up: Option<&'static AtomicU64>,
+    in_counter_down: Option<&'static AtomicU64>,
 ) -> std::io::Result<()> {
     // Connect to remote server
-    let stream_builder;
-    {
-        let ob = router.match_addr(&addr);
-        info!("routing {} to outbound:{}", addr, ob);
-        stream_builder = inner_map.get(ob).unwrap();
-        if stream_builder.is_blackhole() {
-            return Ok(());
-        }
+    let ob = router.match_addr(&addr);
+    let stream_builder = inner_map.get(ob).unwrap();
+    info!("routing {} to outbound:{}", addr, ob);
+    if stream_builder.is_blackhole() {
+        return Ok(());
     }
     let server = stream_builder.build_tcp(addr).await?;
-    relay(upgraded, server).await?;
+    if enable_api_server {
+        let out_down = format!("outbound>>>{}>>>traffic>>>downlink", ob);
+        let out_up = format!("outbound>>>{}>>>traffic>>>uplink", ob);
+        let out_down = COUNTER_MAP.get().unwrap().get(out_down.as_str()).unwrap();
+        let out_up = COUNTER_MAP.get().unwrap().get(out_up.as_str()).unwrap();
+        relay_with_atomic_counter(
+            upgraded,
+            server,
+            in_counter_up.unwrap(),
+            in_counter_down.unwrap(),
+            out_up,
+            out_down,
+        )
+        .await?;
+    } else {
+        relay(upgraded, server).await?;
+    }
     Ok(())
 }

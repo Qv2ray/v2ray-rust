@@ -3,6 +3,8 @@ use std::mem::MaybeUninit;
 
 use crate::common::LW_BUFFER_SIZE;
 use std::pin::Pin;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::Relaxed;
 use std::task::{Context, Poll};
 
 use bytes::{BufMut, BytesMut};
@@ -11,6 +13,8 @@ use log::info;
 
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
+use crate::common::net::copy_with_capacity::copy_with_capacity_and_atomic_counter;
+use crate::debug_log;
 pub use copy_with_capacity::copy_with_capacity_and_counter;
 
 pub mod copy_with_capacity;
@@ -104,5 +108,40 @@ where
             }
     }
     info!("downloaded bytes:{}, uploaded bytes:{}", down, up);
+    Ok(())
+}
+pub async fn relay_with_atomic_counter<T1, T2>(
+    inbound_stream: T1,
+    outbound_stream: T2,
+    inbound_up: &AtomicU64,
+    inbound_down: &AtomicU64,
+    outbound_up: &AtomicU64,
+    outbound_down: &AtomicU64,
+) -> io::Result<()>
+where
+    T1: AsyncRead + AsyncWrite + Unpin,
+    T2: AsyncRead + AsyncWrite + Unpin,
+{
+    let (mut outbound_r, mut outbound_w) = tokio::io::split(outbound_stream);
+    let (mut inbound_r, mut inbound_w) = tokio::io::split(inbound_stream);
+    tokio::select! {
+            _ = copy_with_capacity_and_atomic_counter(&mut outbound_r,
+            &mut inbound_w,
+            outbound_down,
+            inbound_down,
+            LW_BUFFER_SIZE*20)=>{
+            }
+            _ = copy_with_capacity_and_atomic_counter(&mut inbound_r,
+            &mut outbound_w,
+            inbound_up,
+            outbound_up,
+            LW_BUFFER_SIZE*20)=>{
+            }
+    }
+    debug_log!(
+        "api atomic counter downloaded bytes:{}, uploaded bytes:{}",
+        inbound_down.load(Relaxed),
+        inbound_up.load(Relaxed)
+    );
     Ok(())
 }

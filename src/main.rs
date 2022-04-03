@@ -5,6 +5,7 @@ use clap::{Arg, Command};
 use log::info;
 use std::io;
 
+mod api;
 mod common;
 mod config;
 mod proxy;
