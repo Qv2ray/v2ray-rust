@@ -34,6 +34,9 @@ fn main() -> io::Result<()> {
         .author("Developed by @darsvador")
         .about("An opinionated lightweight implementation of V2Ray, in rust programming language")
         .get_matches();
+    #[cfg(debug_assertions)]
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("v2ray_rust=debug"));
+    #[cfg(not(debug_assertions))]
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let filename = matches.value_of("config").unwrap().to_string();
     if matches.is_present("validate") {

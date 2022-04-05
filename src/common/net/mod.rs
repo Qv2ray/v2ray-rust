@@ -4,7 +4,6 @@ use std::mem::MaybeUninit;
 use crate::common::LW_BUFFER_SIZE;
 use std::pin::Pin;
 use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering::Relaxed;
 use std::task::{Context, Poll};
 
 use bytes::{BufMut, BytesMut};
@@ -140,8 +139,8 @@ where
     }
     debug_log!(
         "api atomic counter downloaded bytes:{}, uploaded bytes:{}",
-        inbound_down.load(Relaxed),
-        inbound_up.load(Relaxed)
+        inbound_down.load(std::sync::atomic::Ordering::Relaxed),
+        inbound_up.load(std::sync::atomic::Ordering::Relaxed)
     );
     Ok(())
 }

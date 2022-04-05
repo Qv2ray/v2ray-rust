@@ -1,4 +1,4 @@
-default_outbound = "cn"
+# default_outbound = "cn"
 enable_api_server = true
 api_server_addr = "127.0.0.1:1999"
 
@@ -46,9 +46,6 @@ tag = "h2"
 hosts = ["example.org"]
 path = "/test"
 
-[[blackhole]]
-tag = "b"
-
 [[outbounds]]
 chain = ["w","v"]
 #chain = ["h2","v"]
@@ -60,9 +57,9 @@ chain = ["w","v"]
 # debug
 tag = "cn"
 
-[[outbounds]]
-chain = ["b"]
-tag = "block"
+[[blackhole]]
+tag = "b"
+
 
 [[outbounds]]
 chain = ["d"]
@@ -107,3 +104,7 @@ tag="private"
 # file_path = "your_custom_geoip_file_path"
 rules = ["private"]
 
+
+[[outbounds]]
+chain = ["b"]
+tag = "block"

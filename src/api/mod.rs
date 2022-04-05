@@ -4,9 +4,11 @@ use crate::config::COUNTER_MAP;
 use std::sync::atomic::Ordering::Relaxed;
 
 use tonic::{Request, Response, Status};
-use v2ray_rust_api::stats_service_server::{StatsService, StatsServiceServer};
 
-pub mod v2ray_rust_api;
+pub mod v2ray_rust_api {
+    tonic::include_proto!("v2ray.core.app.stats.command");
+}
+use v2ray_rust_api::stats_service_server::{StatsService, StatsServiceServer};
 
 #[derive(Default)]
 pub struct ApiServer;
@@ -25,10 +27,10 @@ impl StatsService for ApiServer {
     ) -> Result<Response<GetStatsResponse>, Status> {
         let name = &request.get_ref().name;
         let reset = request.get_ref().reset;
-        let mut ret_v = 0u64;
+        let ret_v;
         if let Some(v) = COUNTER_MAP.get().unwrap().get(name) {
             if reset {
-                v.swap(0, Relaxed);
+                ret_v = v.swap(0, Relaxed);
             } else {
                 ret_v = v.load(Relaxed);
             }

@@ -26,7 +26,7 @@ use serde::Deserialize;
 
 use crate::config::route::build_router;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -81,7 +81,7 @@ struct WebsocketConfig {
     #[serde(default)]
     max_early_data: usize,
     #[serde(default)]
-    headers: Vec<(String, String)>,
+    headers: BTreeMap<String, String>,
     tag: String,
 }
 
@@ -176,7 +176,7 @@ struct Http2Config {
     tag: String,
     hosts: Vec<String>,
     #[serde(default)]
-    headers: Vec<(String, String)>,
+    headers: HashMap<String, String>,
     #[serde(
         default = "default_http2_method",
         deserialize_with = "from_str_to_http_method"
@@ -318,6 +318,11 @@ impl Config {
     }
 
     pub fn build_server(mut self) -> io::Result<ConfigServerBuilder> {
+        if self.default_outbound.is_empty() {
+            if let Some(name) = self.outbounds.first() {
+                self.default_outbound = name.tag.clone();
+            }
+        }
         let inner_map = self.build_inner_map()?;
         if !inner_map.contains_key(&self.default_outbound) {
             return Err(new_error(

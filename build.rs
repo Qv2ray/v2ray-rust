@@ -6,7 +6,6 @@ fn main() {
     println!("cargo:rerun-if-changed=src/api/api.proto");
     tonic_build::configure()
         .build_client(false)
-        .out_dir("src/api/")
         .compile(&["src/api/api.proto"], &["src/api/"])
         .unwrap();
     //tonic_build::compile_protos("src/api/api.proto").unwrap();

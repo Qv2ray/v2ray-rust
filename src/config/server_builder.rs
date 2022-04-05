@@ -57,21 +57,21 @@ impl ConfigServerBuilder {
                 let mut map = HashMap::new();
                 for k in self.inner_map.keys() {
                     map.insert(
-                        format!("outbound>>>{}>>>traffic>>>uplink", k.to_string()),
+                        format!("outbound>>>{}>>>traffic>>>uplink", k),
                         AtomicU64::new(0),
                     );
                     map.insert(
-                        format!("outbound>>>{}>>>traffic>>>downlink", k.to_string()),
+                        format!("outbound>>>{}>>>traffic>>>downlink", k),
                         AtomicU64::new(0),
                     );
                 }
                 for k in self.inbounds.iter() {
                     map.insert(
-                        format!("inbound>>>{}>>>traffic>>>uplink", k.tag.to_string()),
+                        format!("inbound>>>{}>>>traffic>>>uplink", k.tag),
                         AtomicU64::new(0),
                     );
                     map.insert(
-                        format!("inbound>>>{}>>>traffic>>>downlink", k.tag.to_string()),
+                        format!("inbound>>>{}>>>traffic>>>downlink", k.tag),
                         AtomicU64::new(0),
                     );
                 }

@@ -17,6 +17,7 @@ use crate::proxy::{
 use futures_util::ready;
 use futures_util::sink::Sink;
 use futures_util::Stream;
+use std::collections::BTreeMap;
 use std::{
     io,
     pin::Pin,
@@ -139,7 +140,7 @@ impl<T: ProxySteam> BinaryWsStream<T> {
 #[derive(Clone)]
 pub struct BinaryWsStreamBuilder {
     uri: Uri,
-    headers: Vec<(String, String)>,
+    headers: BTreeMap<String, String>,
     ws_config: Option<WebSocketConfig>,
     max_early_data: usize,
     early_data_header_name: String,
@@ -151,7 +152,7 @@ impl BinaryWsStreamBuilder {
         max_early_data: usize,
         early_data_header_name: String,
         ws_config: Option<WebSocketConfig>,
-        headers: Vec<(String, String)>,
+        headers: BTreeMap<String, String>,
     ) -> BinaryWsStreamBuilder {
         BinaryWsStreamBuilder {
             uri,

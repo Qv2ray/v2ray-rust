@@ -10,6 +10,7 @@ use h2::{RecvStream, SendStream};
 use http::{Request, Uri, Version};
 use log::error;
 use rand::random;
+use std::collections::HashMap;
 use std::io;
 use std::io::{Error, ErrorKind};
 use std::pin::Pin;
@@ -19,7 +20,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 #[derive(Clone)]
 pub struct Http2StreamBuilder {
     pub hosts: Vec<String>,
-    pub headers: Vec<(String, String)>,
+    pub headers: HashMap<String, String>,
     pub method: http::Method,
     pub path: http::uri::PathAndQuery,
 }
@@ -27,7 +28,7 @@ pub struct Http2StreamBuilder {
 impl Http2StreamBuilder {
     pub fn new(
         hosts: Vec<String>,
-        headers: Vec<(String, String)>,
+        headers: HashMap<String, String>,
         method: http::Method,
         path: http::uri::PathAndQuery,
     ) -> Self {
