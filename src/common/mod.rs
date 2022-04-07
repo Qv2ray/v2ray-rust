@@ -1,5 +1,5 @@
 use crate::debug_log;
-use aes::{Aes128, BlockDecrypt, BlockEncrypt, NewBlockCipher};
+use aes::{cipher::BlockDecrypt, cipher::BlockEncrypt, cipher::KeyInit, Aes128};
 use generic_array::GenericArray;
 use sha2::Digest;
 use sha2::{Sha224, Sha256};
