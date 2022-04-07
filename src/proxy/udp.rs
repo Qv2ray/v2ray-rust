@@ -33,7 +33,7 @@ impl ConnectedUdpSocket {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(target_os = "linux", test))]
 mod tests {
     use crate::proxy::udp::{split_ext, ConnectedUdpSocket};
     use crate::proxy::Address;
