@@ -1,8 +1,6 @@
 use crate::common::aead_helper::AeadCipherHelper;
 use crate::common::net::PollUtil;
 use crate::common::LW_BUFFER_SIZE;
-#[allow(unused_imports)]
-use crate::proxy::show_utf8_lossy;
 use crate::proxy::vmess::vmess_stream::{CHUNK_SIZE, MAX_SIZE};
 use crate::{debug_log, impl_read_utils};
 use aes_gcm::Aes128Gcm;
@@ -28,8 +26,6 @@ pub struct VmessAeadWriter {
     write_res: Poll<io::Result<usize>>,
 }
 pub enum VmessSecurity {
-    #[allow(dead_code)] // todo: vmess chunk stream
-    None,
     Aes128Gcm(Aes128Gcm),
     ChaCha20Poly1305(ChaCha20Poly1305),
 }
@@ -118,9 +114,6 @@ impl VmessAeadWriter {
         let aad = [0u8; 0];
         let nonce_len = self.security.nonce_len();
         match &mut self.security {
-            VmessSecurity::None => {
-                unreachable!()
-            }
             VmessSecurity::Aes128Gcm(cipher) => {
                 cipher.encrypt_inplace_with_slice(&self.nonce[..nonce_len], &aad, mbuf);
                 unsafe { self.buffer.advance_mut(16) };
@@ -192,9 +185,6 @@ impl VmessAeadReader {
         let nonce_len = self.security.nonce_len();
         let res: bool;
         match &mut self.security {
-            VmessSecurity::None => {
-                unreachable!()
-            }
             VmessSecurity::Aes128Gcm(cipher) => {
                 res = cipher.decrypt_inplace_with_slice(
                     &self.nonce[..nonce_len],
@@ -270,10 +260,6 @@ impl VmessAeadReader {
                 "data_length(include aead tag): {},buffer_len:{}",
                 self.data_length,
                 self.buffer.len()
-            );
-            debug_log!(
-                "show_utf8_lossy data:{}",
-                show_utf8_lossy(&self.buffer[..self.data_length - 16])
             );
             self.data_length -= 16; //remove tag
                                     // 5. put data

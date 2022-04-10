@@ -110,10 +110,8 @@ impl<S> VmessStream<S> {
         let writer_cipher: VmessSecurity;
         let reader: VmessAeadReader;
         let writer: VmessAeadWriter;
-        debug_log!("req body key in salt:{:02X?}", &salt[16..32]);
         let resp_body_key = sha256(&salt[16..32]);
         let resp_body_iv = sha256(&salt[0..16]);
-        debug_log!("resp body key:{:02X?}", &resp_body_key[..16]);
         salt[32..48].copy_from_slice(&resp_body_key[..16]);
         salt[48..64].copy_from_slice(&resp_body_iv[..16]);
         let req_body_iv = &salt[0..16];
@@ -148,8 +146,7 @@ impl<S> VmessStream<S> {
                 reader = VmessAeadReader::new(resp_body_iv, reader_cipher);
             }
             _ => {
-                // todo
-                todo!();
+                unimplemented!();
             }
         }
         let mut v = VmessStream {

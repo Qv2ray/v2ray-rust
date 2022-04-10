@@ -53,8 +53,9 @@ where
         security_num = 0x03;
     } else if security == "chacha20-poly1305" {
         security_num = 0x04;
-    } else if security == "none" {
-        security_num = 0x05;
+    } else if security == "none" || security == "zero" {
+        let msg = format!("not support vmess security type:{}", security);
+        return Err(D::Error::custom(msg.as_str()));
     } else if security == "auto" {
         #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         {
@@ -65,7 +66,7 @@ where
             security_num = 0x04;
         }
     } else {
-        let msg = format!("unknown security type {}", security);
+        let msg = format!("unknown vmess security type {}", security);
         return Err(D::Error::custom(msg.as_str()));
     };
     Ok(security_num)

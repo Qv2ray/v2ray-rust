@@ -75,6 +75,14 @@ impl ConfigServerBuilder {
                         AtomicU64::new(0),
                     );
                 }
+                map.insert(
+                    "inbound>>>dokodemo>>>traffic>>>uplink".to_string(),
+                    AtomicU64::new(0),
+                );
+                map.insert(
+                    "inbound>>>dokodemo>>>traffic>>>downlink".to_string(),
+                    AtomicU64::new(0),
+                );
                 map
             });
         }
@@ -114,18 +122,42 @@ impl ConfigServerBuilder {
                                     let out_stream = addr.connect_tcp().await?;
                                     return relay(io, out_stream).await;
                                 }
-                                let stream_builder;
-                                {
-                                    let ob = router.match_socket_addr(&dokodemo_door_addr);
-                                    info!(
-                                        "routing dokodemo addr {} to outbound:{}",
-                                        dokodemo_door_addr, ob
-                                    );
-                                    stream_builder = inner_map.get(ob).unwrap();
-                                }
+                                let ob = router.match_socket_addr(&dokodemo_door_addr);
+                                info!(
+                                    "routing dokodemo addr {} to outbound:{}",
+                                    dokodemo_door_addr, ob
+                                );
+                                let stream_builder = inner_map.get(ob).unwrap();
                                 let out_stream =
                                     stream_builder.build_tcp(dokodemo_door_addr.into()).await?;
-                                return relay(io, out_stream).await;
+                                if enable_api_server {
+                                    let in_down = COUNTER_MAP
+                                        .get()
+                                        .unwrap()
+                                        .get("inbound>>>dokodemo>>>traffic>>>downlink");
+                                    let in_up = COUNTER_MAP
+                                        .get()
+                                        .unwrap()
+                                        .get("inbound>>>dokodemo>>>traffic>>>uplink");
+                                    let out_down =
+                                        format!("outbound>>>{}>>>traffic>>>downlink", ob);
+                                    let out_up = format!("outbound>>>{}>>>traffic>>>uplink", ob);
+                                    let out_down =
+                                        COUNTER_MAP.get().unwrap().get(out_down.as_str()).unwrap();
+                                    let out_up =
+                                        COUNTER_MAP.get().unwrap().get(out_up.as_str()).unwrap();
+                                    return relay_with_atomic_counter(
+                                        io,
+                                        out_stream,
+                                        in_up.unwrap(),
+                                        in_down.unwrap(),
+                                        out_up,
+                                        out_down,
+                                    )
+                                    .await;
+                                } else {
+                                    return relay(io, out_stream).await;
+                                }
                             }
                         })
                     })?;

@@ -9,7 +9,6 @@ use std::io;
 
 mod aead;
 mod aead_header;
-mod chunk;
 mod kdf;
 pub mod vmess_option;
 pub mod vmess_stream;
