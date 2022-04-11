@@ -23,6 +23,7 @@ pub async fn serve_http_conn(
     enable_api_server: bool,
     in_counter_up: Option<&'static AtomicU64>,
     in_counter_down: Option<&'static AtomicU64>,
+    relay_buffer_size: usize,
 ) -> io::Result<()> {
     let mut http_conn = Http::new();
     http_conn
@@ -42,6 +43,7 @@ pub async fn serve_http_conn(
                         enable_api_server,
                         in_counter_up,
                         in_counter_down,
+                        relay_buffer_size,
                     )
                     .await
                 }
@@ -62,6 +64,7 @@ async fn proxy(
     enable_api_server: bool,
     in_counter_up: Option<&'static AtomicU64>,
     in_counter_down: Option<&'static AtomicU64>,
+    relay_buffer_size: usize,
 ) -> Result<Response<Body>, hyper::Error> {
     debug_log!("http proxy server req: {:?}", req);
 
@@ -80,6 +83,7 @@ async fn proxy(
                             enable_api_server,
                             in_counter_up,
                             in_counter_down,
+                            relay_buffer_size,
                         )
                         .await
                         {
@@ -121,6 +125,7 @@ async fn tunnel(
     enable_api_server: bool,
     in_counter_up: Option<&'static AtomicU64>,
     in_counter_down: Option<&'static AtomicU64>,
+    relay_buffer_size: usize,
 ) -> std::io::Result<()> {
     // Connect to remote server
     let ob = router.match_addr(&addr);
@@ -142,10 +147,11 @@ async fn tunnel(
             in_counter_down.unwrap(),
             out_up,
             out_down,
+            relay_buffer_size,
         )
         .await?;
     } else {
-        relay(upgraded, server).await?;
+        relay(upgraded, server, relay_buffer_size).await?;
     }
     Ok(())
 }

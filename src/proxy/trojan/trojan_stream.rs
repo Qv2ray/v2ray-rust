@@ -114,7 +114,7 @@ impl RequestHeader {
         addr.write_to_buf(cursor);
         cursor.put_slice(crlf);
 
-        w.write(&buf).await?;
+        w.write_all(&buf).await?;
         Ok(())
     }
 }

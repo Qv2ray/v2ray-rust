@@ -91,7 +91,11 @@ impl<T: Default + Copy> PollUtil for Poll<io::Result<T>> {
         }
     }
 }
-pub async fn relay<T1, T2>(inbound_stream: T1, outbound_stream: T2) -> io::Result<()>
+pub async fn relay<T1, T2>(
+    inbound_stream: T1,
+    outbound_stream: T2,
+    relay_buffer_size: usize,
+) -> io::Result<()>
 where
     T1: AsyncRead + AsyncWrite + Unpin,
     T2: AsyncRead + AsyncWrite + Unpin,
@@ -101,9 +105,9 @@ where
     let mut down = 0u64;
     let mut up = 0u64;
     tokio::select! {
-            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE*20)=>{
+            _ = copy_with_capacity_and_counter(&mut outbound_r,&mut inbound_w,&mut down,LW_BUFFER_SIZE*relay_buffer_size)=>{
             }
-            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*20)=>{
+            _ = copy_with_capacity_and_counter(&mut inbound_r, &mut outbound_w,&mut up,LW_BUFFER_SIZE*relay_buffer_size)=>{
             }
     }
     info!("downloaded bytes:{}, uploaded bytes:{}", down, up);
@@ -116,6 +120,7 @@ pub async fn relay_with_atomic_counter<T1, T2>(
     inbound_down: &AtomicU64,
     outbound_up: &AtomicU64,
     outbound_down: &AtomicU64,
+    relay_buffer_size: usize,
 ) -> io::Result<()>
 where
     T1: AsyncRead + AsyncWrite + Unpin,
@@ -128,13 +133,13 @@ where
             &mut inbound_w,
             outbound_down,
             inbound_down,
-            LW_BUFFER_SIZE*20)=>{
+            LW_BUFFER_SIZE*relay_buffer_size)=>{
             }
             _ = copy_with_capacity_and_atomic_counter(&mut inbound_r,
             &mut outbound_w,
             inbound_up,
             outbound_up,
-            LW_BUFFER_SIZE*20)=>{
+            LW_BUFFER_SIZE*relay_buffer_size)=>{
             }
     }
     debug_log!(

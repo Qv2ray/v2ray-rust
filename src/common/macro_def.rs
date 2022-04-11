@@ -125,7 +125,7 @@ macro_rules! impl_read_utils {
         where
             R: AsyncRead + Unpin,
         {
-            use crate::common::net::poll_read_buf;
+            use $crate::common::net::poll_read_buf;
             while self.buffer.len() < length {
                 let n = ready!(poll_read_buf(r, ctx, &mut self.buffer))?;
                 if n == 0 {

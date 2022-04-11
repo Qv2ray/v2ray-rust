@@ -21,6 +21,7 @@ pub static COUNTER_MAP: OnceCell<HashMap<String, AtomicU64>> = OnceCell::new();
 
 pub struct ConfigServerBuilder {
     backlog: u32,
+    relay_buffer_size: usize,
     inbounds: Vec<Inbounds>,
     dokodemo: Vec<DokodemoDoor>,
     router: Arc<Router>,
@@ -32,6 +33,7 @@ pub struct ConfigServerBuilder {
 impl ConfigServerBuilder {
     pub(super) fn new(
         backlog: u32,
+        relay_buffer_size: usize,
         inbounds: Vec<Inbounds>,
         dokodemo: Vec<DokodemoDoor>,
         router: Arc<Router>,
@@ -41,6 +43,7 @@ impl ConfigServerBuilder {
     ) -> Self {
         Self {
             backlog,
+            relay_buffer_size,
             inbounds,
             dokodemo,
             router,
@@ -120,7 +123,7 @@ impl ConfigServerBuilder {
                                 let dokodemo_door_addr = io.local_addr()?;
                                 if let Some(addr) = target_addr {
                                     let out_stream = addr.connect_tcp().await?;
-                                    return relay(io, out_stream).await;
+                                    return relay(io, out_stream, self.relay_buffer_size).await;
                                 }
                                 let ob = router.match_socket_addr(&dokodemo_door_addr);
                                 info!(
@@ -153,10 +156,11 @@ impl ConfigServerBuilder {
                                         in_down.unwrap(),
                                         out_up,
                                         out_down,
+                                        self.relay_buffer_size,
                                     )
                                     .await;
                                 } else {
-                                    return relay(io, out_stream).await;
+                                    return relay(io, out_stream, self.relay_buffer_size).await;
                                 }
                             }
                         })
@@ -192,6 +196,7 @@ impl ConfigServerBuilder {
                                         enable_api_server,
                                         in_up,
                                         in_down,
+                                        self.relay_buffer_size,
                                     )
                                     .await;
                                 }
@@ -228,10 +233,11 @@ impl ConfigServerBuilder {
                                         in_down.unwrap(),
                                         out_up,
                                         out_down,
+                                        self.relay_buffer_size,
                                     )
                                     .await;
                                 } else {
-                                    return relay(x.0, out_stream).await;
+                                    return relay(x.0, out_stream, self.relay_buffer_size).await;
                                 }
                             }
                         })

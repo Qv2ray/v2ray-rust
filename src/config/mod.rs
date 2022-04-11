@@ -12,8 +12,8 @@ pub use to_chainable_builder::ToChainableStreamBuilder;
 
 use crate::common::new_error;
 use crate::config::deserialize::{
-    default_backlog, default_http2_method, default_random_string, default_true,
-    default_v2ray_geoip_path, default_v2ray_geosite_path, from_str_to_address,
+    default_backlog, default_http2_method, default_random_string, default_relay_buffer_size,
+    default_true, default_v2ray_geoip_path, default_v2ray_geosite_path, from_str_to_address,
     from_str_to_cipher_kind, from_str_to_http_method, from_str_to_option_address, from_str_to_path,
     from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
@@ -190,6 +190,8 @@ struct Http2Config {
 pub struct Config {
     #[serde(default)]
     enable_api_server: bool,
+    #[serde(default = "default_relay_buffer_size")]
+    relay_buffer_size: usize,
     #[serde(deserialize_with = "from_str_to_address", default)]
     api_server_addr: Address,
 
@@ -339,6 +341,7 @@ impl Config {
         )?;
         Ok(ConfigServerBuilder::new(
             self.backlog,
+            self.relay_buffer_size,
             std::mem::take(&mut self.inbounds),
             std::mem::take(&mut self.dokodemo),
             Arc::new(router),

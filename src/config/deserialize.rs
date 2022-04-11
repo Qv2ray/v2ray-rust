@@ -289,6 +289,9 @@ where
     }
 }
 
+pub(super) fn default_relay_buffer_size() -> usize {
+    20
+}
 pub(super) fn default_backlog() -> u32 {
     4096
 }
