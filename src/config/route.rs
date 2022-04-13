@@ -12,27 +12,28 @@ use cidr_utils::cidr::IpCidr;
 use protobuf::CodedInputStream;
 
 use regex::{RegexSet, RegexSetBuilder};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io;
 
+use crate::config::utils::KeepInsertOrderMap;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
 
 use super::ip_trie::GeoIPMatcher;
 
 pub(super) struct RouterBuilder {
-    domain_matchers: BTreeMap<String, Box<dyn DomainMatcher>>,
+    domain_matchers: KeepInsertOrderMap<Box<dyn DomainMatcher>>,
     ip_matcher: GeoIPMatcher,
-    regex_matchers: BTreeMap<String, Vec<String>>,
+    regex_matchers: KeepInsertOrderMap<Vec<String>>,
 }
 
 impl RouterBuilder {
     pub fn new() -> RouterBuilder {
         RouterBuilder {
-            domain_matchers: BTreeMap::new(),
+            domain_matchers: KeepInsertOrderMap::new(),
             ip_matcher: GeoIPMatcher::new(),
-            regex_matchers: BTreeMap::new(),
+            regex_matchers: KeepInsertOrderMap::new(),
         }
     }
 
@@ -279,7 +280,7 @@ impl RouterBuilder {
 
     pub fn build(mut self, default_outbound_tag: String) -> io::Result<Router> {
         let mut regex_matchers = HashMap::new();
-        for (outbound_tag, rules) in self.regex_matchers {
+        for (outbound_tag, rules) in self.regex_matchers.into_iter() {
             let rule_set = match RegexSetBuilder::new(rules).build() {
                 Ok(r) => r,
                 Err(e) => {
@@ -293,9 +294,7 @@ impl RouterBuilder {
         }
         self.domain_matchers.iter_mut().for_each(|x| x.1.build());
         let mut domain_matchers: Vec<(String, Box<dyn DomainMatcher>)> =
-            std::mem::take(&mut self.domain_matchers)
-                .into_iter()
-                .collect();
+            self.domain_matchers.into();
         domain_matchers.shrink_to_fit();
         let mut regex_matchers: Vec<(String, RegexSet)> =
             std::mem::take(&mut regex_matchers).into_iter().collect();

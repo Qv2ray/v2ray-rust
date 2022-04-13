@@ -5,6 +5,7 @@ mod ip_trie;
 mod route;
 mod server_builder;
 mod to_chainable_builder;
+mod utils;
 
 pub use route::Router;
 pub use server_builder::{ConfigServerBuilder, COUNTER_MAP};
