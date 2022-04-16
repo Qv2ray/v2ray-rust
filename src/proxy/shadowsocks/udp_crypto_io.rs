@@ -279,12 +279,6 @@ impl<T: ProxyUdpStream> AsyncWrite for ShadowSocksUdpStream<T> {
     }
 }
 
-impl<T: ProxyUdpStream> ProxyUdpStream for ShadowSocksUdpStream<T> {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}
-
 impl<T: UdpWrite + Unpin> ShadowSocksUdpStream<T> {
     #[gentian]
     #[gentian_attr(ret_val=Err(ErrorKind::UnexpectedEof.into()).into())]

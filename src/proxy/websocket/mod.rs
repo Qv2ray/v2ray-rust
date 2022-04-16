@@ -122,12 +122,6 @@ impl<T: ProxyUdpStream> UdpRead for BinaryWsStream<T> {}
 
 impl<T: ProxyUdpStream> UdpWrite for BinaryWsStream<T> {}
 
-impl<T: ProxyUdpStream> ProxyUdpStream for BinaryWsStream<T> {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}
-
 impl<T: ProxySteam> BinaryWsStream<T> {
     pub fn new(inner: WebSocketStream<T>) -> Self {
         Self {

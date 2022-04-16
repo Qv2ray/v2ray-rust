@@ -1,5 +1,3 @@
-extern crate core;
-
 use crate::config::Config;
 use clap::{Arg, Command};
 use log::info;
@@ -35,7 +33,7 @@ fn main() -> io::Result<()> {
         .about("An opinionated lightweight implementation of V2Ray, in rust programming language")
         .get_matches();
     #[cfg(debug_assertions)]
-    env_logger::init_from_env(env_logger::Env::new().default_filter_or("v2ray_rust=debug"));
+    env_logger::init_from_env(env_logger::Env::new().default_filter_or("v2ray_rust=debug,info"));
     #[cfg(not(debug_assertions))]
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let filename = matches.value_of("config").unwrap().to_string();

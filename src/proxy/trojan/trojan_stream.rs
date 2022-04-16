@@ -1,6 +1,6 @@
 use crate::impl_flush_shutdown;
 use crate::proxy::Address;
-use crate::proxy::ProxyUdpStream;
+
 use crate::{common::net::PollUtil, common::new_error, proxy::UdpRead, proxy::UdpWrite};
 use bytes::BufMut;
 use std::io;
@@ -196,12 +196,6 @@ impl<T: AsyncWrite + Unpin> AsyncWrite for TrojanUdpStream<T> {
 
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         self.priv_poll_shutdown(cx)
-    }
-}
-
-impl<T: ProxyUdpStream> ProxyUdpStream for TrojanUdpStream<T> {
-    fn is_tokio_socket(&self) -> bool {
-        false
     }
 }
 

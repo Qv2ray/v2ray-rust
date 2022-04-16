@@ -187,9 +187,3 @@ impl_async_useful_traits!(CryptoStream);
 impl<S: ProxyUdpStream> UdpRead for CryptoStream<S> {}
 
 impl<S: ProxyUdpStream> UdpWrite for CryptoStream<S> {}
-
-impl<S: ProxyUdpStream> ProxyUdpStream for CryptoStream<S> {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}

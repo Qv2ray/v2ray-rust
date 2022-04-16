@@ -1,7 +1,7 @@
 use crate::common::new_error;
 use crate::debug_log;
 use crate::proxy::websocket::BinaryWsStream;
-use crate::proxy::{BoxProxyStream, ProxyUdpStream, UdpRead, UdpWrite};
+use crate::proxy::{BoxProxyStream, UdpRead, UdpWrite};
 use base64::encode_config;
 use base64::URL_SAFE_NO_PAD;
 use futures_util::ready;
@@ -186,8 +186,3 @@ impl AsyncWrite for BinaryWsStreamWithEarlyData {
 
 impl UdpRead for BinaryWsStreamWithEarlyData {}
 impl UdpWrite for BinaryWsStreamWithEarlyData {}
-impl ProxyUdpStream for BinaryWsStreamWithEarlyData {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}

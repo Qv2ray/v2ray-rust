@@ -235,7 +235,7 @@ impl Address {
     {
         let mut buf = BytesMut::with_capacity(self.serialized_len());
         self.write_to_buf(&mut buf);
-        writer.write(&buf).await?;
+        writer.write_all(&buf).await?;
         Ok(())
     }
 

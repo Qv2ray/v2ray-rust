@@ -183,24 +183,18 @@ impl VmessAeadReader {
     fn decrypted_data(&mut self) -> bool {
         let aad = [0u8; 0];
         let nonce_len = self.security.nonce_len();
-        let res: bool;
         match &mut self.security {
-            VmessSecurity::Aes128Gcm(cipher) => {
-                res = cipher.decrypt_inplace_with_slice(
-                    &self.nonce[..nonce_len],
-                    &aad,
-                    &mut self.buffer[..self.data_length],
-                );
-            }
-            VmessSecurity::ChaCha20Poly1305(cipher) => {
-                res = cipher.decrypt_inplace_with_slice(
-                    &self.nonce[..nonce_len],
-                    &aad,
-                    &mut self.buffer[..self.data_length],
-                );
-            }
+            VmessSecurity::Aes128Gcm(cipher) => cipher.decrypt_inplace_with_slice(
+                &self.nonce[..nonce_len],
+                &aad,
+                &mut self.buffer[..self.data_length],
+            ),
+            VmessSecurity::ChaCha20Poly1305(cipher) => cipher.decrypt_inplace_with_slice(
+                &self.nonce[..nonce_len],
+                &aad,
+                &mut self.buffer[..self.data_length],
+            ),
         }
-        res
     }
 
     #[gentian]

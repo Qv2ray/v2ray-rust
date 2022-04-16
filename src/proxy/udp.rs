@@ -125,12 +125,6 @@ impl UdpWrite for ConnectedUdpSocket {
     }
 }
 
-impl ProxyUdpStream for ConnectedUdpSocket {
-    fn is_tokio_socket(&self) -> bool {
-        true
-    }
-}
-
 pub struct UdpReadHalf<'a, 'b, T> {
     reader: &'a mut T,
     buf: &'b mut BytesMut,

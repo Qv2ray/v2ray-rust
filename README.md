@@ -1,5 +1,6 @@
 # v2ray-rust
 [![Rust](https://github.com/Qv2ray/v2ray-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/Qv2ray/v2ray-rust/actions/workflows/rust.yml)
+[![dependency status](https://deps.rs/repo/github/Qv2ray/v2ray-rust/status.svg)](https://deps.rs/repo/github/Qv2ray/v2ray-rust)
 
 An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 

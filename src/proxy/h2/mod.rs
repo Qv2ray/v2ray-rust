@@ -1,7 +1,6 @@
 use crate::common::{new_error, LW_BUFFER_SIZE};
 use crate::proxy::{
-    BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, ProxyUdpStream,
-    UdpRead, UdpWrite,
+    BoxProxyStream, BoxProxyUdpStream, ChainableStreamBuilder, ProtocolType, UdpRead, UdpWrite,
 };
 use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
@@ -210,8 +209,3 @@ impl AsyncWrite for Http2Stream {
 
 impl UdpRead for Http2Stream {}
 impl UdpWrite for Http2Stream {}
-impl ProxyUdpStream for Http2Stream {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}

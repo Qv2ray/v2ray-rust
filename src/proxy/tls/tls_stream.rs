@@ -81,12 +81,6 @@ impl<S: ProxyUdpStream> UdpRead for SslStream<S> {}
 
 impl<S: ProxyUdpStream> UdpWrite for SslStream<S> {}
 
-impl<S: ProxyUdpStream> ProxyUdpStream for tokio_boring::SslStream<S> {
-    fn is_tokio_socket(&self) -> bool {
-        false
-    }
-}
-
 macro_rules! build_tcp_impl {
     ($name:tt,$io:tt) => {
         let mut configuration = $name.connector.configure().unwrap();

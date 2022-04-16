@@ -119,9 +119,8 @@ pub trait UdpWrite {
     }
 }
 
-pub trait ProxyUdpStream: AsyncRead + AsyncWrite + Send + Unpin + UdpRead + UdpWrite {
-    fn is_tokio_socket(&self) -> bool;
-}
+pub trait ProxyUdpStream: AsyncRead + AsyncWrite + Send + Unpin + UdpRead + UdpWrite {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + UdpRead + UdpWrite> ProxyUdpStream for T {}
 
 impl<T: ?Sized + UdpRead + Unpin> UdpRead for Box<T> {
     deref_udp_read!();
@@ -136,21 +135,9 @@ impl<T: ?Sized + UdpWrite + Unpin> UdpWrite for &mut T {
     deref_udp_write!();
 }
 
-impl<T: ?Sized + ProxyUdpStream> ProxyUdpStream for Box<T> {
-    fn is_tokio_socket(&self) -> bool {
-        (**self).is_tokio_socket()
-    }
-}
-
 impl UdpRead for TcpStream {}
 
 impl UdpWrite for TcpStream {}
-
-impl ProxyUdpStream for TcpStream {
-    fn is_tokio_socket(&self) -> bool {
-        true
-    }
-}
 
 pub trait ProxySteam: AsyncRead + AsyncWrite + Unpin + Send {}
 impl<T: AsyncRead + AsyncWrite + Unpin + Send> ProxySteam for T {}

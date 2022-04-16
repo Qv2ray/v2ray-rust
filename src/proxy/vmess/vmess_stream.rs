@@ -15,7 +15,7 @@ use crate::common::{random_iv_or_salt, sha256};
 use crate::proxy::vmess::aead::{VmessAeadReader, VmessAeadWriter, VmessSecurity};
 use crate::proxy::vmess::aead_header::{seal_vmess_aead_header, VmessHeaderReader};
 use crate::proxy::vmess::vmess_option::VmessOption;
-use crate::proxy::{Address, ProxyUdpStream, UdpRead, UdpWrite};
+use crate::proxy::{Address, UdpRead, UdpWrite};
 use crate::{
     debug_log, impl_async_read, impl_async_useful_traits, impl_async_write, impl_flush_shutdown,
     md5,
@@ -300,11 +300,5 @@ impl<S: AsyncWrite + AsyncRead + Send + Unpin> UdpWrite for VmessStream<S> {
             }
         }
         self.priv_poll_write(cx, buf)
-    }
-}
-
-impl<S: AsyncWrite + AsyncRead + Send + Unpin> ProxyUdpStream for VmessStream<S> {
-    fn is_tokio_socket(&self) -> bool {
-        false
     }
 }

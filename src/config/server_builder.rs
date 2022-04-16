@@ -243,7 +243,13 @@ impl ConfigServerBuilder {
                         })
                     })?;
                 }
-                server.run().await
+                let res = server.run().await;
+                if let Err(ref e) = res {
+                    log::info!("v2ray-rust stopped: {}", e);
+                } else {
+                    log::info!("v2ray-rust stopped");
+                }
+                res
             })
         }
     }
