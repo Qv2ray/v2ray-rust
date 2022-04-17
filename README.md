@@ -1,9 +1,16 @@
 # v2ray-rust
 [![Rust](https://github.com/Qv2ray/v2ray-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/Qv2ray/v2ray-rust/actions/workflows/rust.yml)
 [![dependency status](https://deps.rs/repo/github/Qv2ray/v2ray-rust/status.svg)](https://deps.rs/repo/github/Qv2ray/v2ray-rust)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 
+## GUI Support
+
+[qv2ray](https://github.com/Shadowsocks-NET/Qv2ray)
+
+
+![qv2ray](./images/gui.png)
 
 ## Features
 
