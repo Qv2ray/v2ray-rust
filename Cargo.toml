@@ -53,7 +53,7 @@ tokio-tungstenite = {version = "0.17", features = ["stream"], default-features =
 tokio-util = {version = "0.7", features = ["codec", "net"]}
 toml = "0.5"
 tonic = "0.7"
-uuid = {version = "0.8", features = ["std", "v4"]}
+uuid = {version = "1.0", features = ["std", "v4"]}
 #cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
 brotli = "3.3.4"
 gentian = "0.1.8"
