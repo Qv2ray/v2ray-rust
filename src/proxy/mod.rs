@@ -19,6 +19,7 @@ mod address;
 pub mod blackhole;
 pub mod direct;
 pub mod dokodemo_door;
+pub mod grpc;
 pub mod h2;
 pub mod http;
 pub mod shadowsocks;
@@ -64,6 +65,7 @@ pub enum ProtocolType {
     SS,
     Tls,
     Vmess,
+    Grpc,
     WS,
     Trojan,
     Direct,

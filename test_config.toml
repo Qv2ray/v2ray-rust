@@ -46,8 +46,13 @@ tag = "h2"
 hosts = ["example.org"]
 path = "/test"
 
+[[grpc]]
+tag = "grpc"
+host = "127.0.0.1:10002"
+service_name = "gungungun"
+
 [[outbounds]]
-chain = ["w","v"]
+chain = ["grpc","v"]
 #chain = ["h2","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]

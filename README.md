@@ -26,7 +26,9 @@ An Opinionated Lightweight Implementation of V2Ray, in Rust Programming Language
 ## Config example
 
 ````toml
-default_outbound = "proxy"
+# default_outbound = "cn"
+enable_api_server = true
+api_server_addr = "127.0.0.1:1999"
 
 [[ss]]
 addr = "127.0.0.1:9000"
@@ -61,18 +63,25 @@ password = "password"
 tag = "t"
 
 [[ws]]
-uri = "ws://127.0.0.1:10002/"
+uri = "ws://127.0.0.1:10002/?ed=2048"
 tag = "w"
 
 [[direct]]
 tag = "d"
 
-[[outbounds]]
-chain = ["ss0","ss1","ss2","ss3"]
-tag = "proxy"
+[[h2]]
+tag = "h2"
+hosts = ["example.org"]
+path = "/test"
+
+[[grpc]]
+tag = "grpc"
+host = "127.0.0.1:10002"
+service_name = "gungungun"
 
 [[outbounds]]
-chain = ["w","v","ss0","ss1"]
+chain = ["grpc","v"]
+#chain = ["h2","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]
 # chain = ["ss0","ss1","ss2","ss3"]
@@ -81,6 +90,10 @@ chain = ["w","v","ss0","ss1"]
 # debug
 tag = "cn"
 
+[[blackhole]]
+tag = "b"
+
+
 [[outbounds]]
 chain = ["d"]
 tag = "private"
@@ -88,25 +101,50 @@ tag = "private"
 [[inbounds]]
 addr = "127.0.0.1:1087"
 enable_udp = true
+tag = "mixed"
 
 # [[dokodemo]]
 # addr = "127.0.0.1:12345"
 # tproxy = true
+[[ip_routing_rules]]
+tag = "block"
+# only block 192.168.0.1 and route 192.168.0.2-192.168.0.254 to other outbounds
+cidr_rules = ["192.168.0.1/32"]
 
+[[domain_routing_rules]]
+tag = "block"
+domain_rules = ["baidu.com"]
+
+
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geosite_rules]]
 tag = "cn"
-file_path = "/usr/share/v2ray/geosite.dat"
+# file_path = "your_custom_geosite_file_path"
 rules = ["cn"]
 
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geoip_rules]]
 tag = "cn"
-file_path = "/usr/share/v2ray/geoip.dat"
+# file_path = "your_custom_geoip_file_path"
 rules = ["cn"]
 
+# If file path is not provided,
+# v2ray-rs will read env varaiable `v2ray.location.asset` or `V2RAY_LOCATION_ASSET` or current exe dir
 [[geoip_rules]]
 tag="private"
-file_path = "/usr/share/v2ray/geoip.dat"
+# file_path = "your_custom_geoip_file_path"
 rules = ["private"]
+
+
+[[outbounds]]
+chain = ["b"]
+tag = "block"
+
+# [[dokodemo]]
+# addr = "127.0.0.1:12345"
+# tproxy = true
 ````
 
 ## Roadmap
@@ -160,6 +198,7 @@ rules = ["private"]
 - ✅ HTTP/2
 - ✅ WebSocket
 - ✅ WebSocket-0-rtt
+- ✅ gRPC
 - ❌ QUIC
 - ❌ DomainSocket
 - ❌ mKCP

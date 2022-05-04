@@ -13,10 +13,11 @@ pub use to_chainable_builder::ToChainableStreamBuilder;
 
 use crate::common::new_error;
 use crate::config::deserialize::{
-    default_backlog, default_http2_method, default_random_string, default_relay_buffer_size,
-    default_true, default_v2ray_geoip_path, default_v2ray_geosite_path, from_str_to_address,
-    from_str_to_cipher_kind, from_str_to_http_method, from_str_to_option_address, from_str_to_path,
-    from_str_to_security_num, from_str_to_sni, from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
+    default_backlog, default_grpc_path, default_http2_method, default_random_string,
+    default_relay_buffer_size, default_true, default_v2ray_geoip_path, default_v2ray_geosite_path,
+    from_str_to_address, from_str_to_cipher_kind, from_str_to_grpc_path, from_str_to_http_method,
+    from_str_to_option_address, from_str_to_path, from_str_to_security_num, from_str_to_sni,
+    from_str_to_uuid, from_str_to_ws_uri, EarlyDataUri,
 };
 use crate::proxy::shadowsocks::aead_helper::CipherKind;
 use crate::proxy::shadowsocks::context::{BloomContext, SharedBloomContext};
@@ -187,6 +188,18 @@ struct Http2Config {
     path: http::uri::PathAndQuery,
 }
 
+#[derive(Deserialize, Clone)]
+struct GrpcConfig {
+    tag: String,
+    host: String,
+    #[serde(
+        rename(deserialize = "service_name"),
+        deserialize_with = "from_str_to_grpc_path",
+        default = "default_grpc_path"
+    )]
+    path: http::uri::PathAndQuery,
+}
+
 #[derive(Deserialize)]
 pub struct Config {
     #[serde(default)]
@@ -221,6 +234,8 @@ pub struct Config {
     #[serde(default)]
     h2: Vec<Http2Config>,
     #[serde(default)]
+    grpc: Vec<GrpcConfig>,
+    #[serde(default)]
     geosite_rules: Vec<GeoSiteRules>,
     #[serde(default)]
     geoip_rules: Vec<GeoIpRules>,
@@ -243,6 +258,7 @@ impl std::ops::Index<(ProtocolType, usize)> for Config {
             ProtocolType::Trojan => &self.trojan[index.1],
             ProtocolType::Direct => &self.direct[index.1],
             ProtocolType::H2 => &self.h2[index.1],
+            ProtocolType::Grpc => &self.grpc[index.1],
             ProtocolType::Blackhole => &self.blackhole[index.1],
         }
     }
@@ -274,6 +290,7 @@ impl Config {
         insert_config_map!(self.trojan, config_map);
         insert_config_map!(self.direct, config_map);
         insert_config_map!(self.h2, config_map);
+        insert_config_map!(self.grpc, config_map);
         insert_config_map!(self.blackhole, config_map);
         let mut inner_map = HashMap::new();
         for out in self.outbounds.iter() {

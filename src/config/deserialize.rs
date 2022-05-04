@@ -176,6 +176,16 @@ where
     let path_and_query: &str = Deserialize::deserialize(deserializer)?;
     path_and_query.try_into().map_err(D::Error::custom)
 }
+
+pub(super) fn from_str_to_grpc_path<'de, D>(deserializer: D) -> Result<PathAndQuery, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let service_name: &str = Deserialize::deserialize(deserializer)?;
+    let path_and_query = format!("/{}/Tun", service_name);
+    path_and_query.try_into().map_err(D::Error::custom)
+}
+
 pub(super) fn from_str_to_http_method<'de, D>(deserializer: D) -> Result<Method, D::Error>
 where
     D: Deserializer<'de>,
@@ -288,7 +298,9 @@ where
         Err(D::Error::custom("Not a valid sni string"))
     }
 }
-
+pub(super) fn default_grpc_path() -> PathAndQuery {
+    "/GunService/Tun".try_into().unwrap()
+}
 pub(super) fn default_relay_buffer_size() -> usize {
     20
 }
