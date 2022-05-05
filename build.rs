@@ -1,4 +1,4 @@
-use protobuf_codegen_pure::Customize;
+use protobuf_codegen::Customize;
 
 fn main() {
     println!("cargo:rerun-if-changed=src/config/geosite.proto");
@@ -9,22 +9,13 @@ fn main() {
         .compile(&["src/api/api.proto"], &["src/api/"])
         .unwrap();
     //tonic_build::compile_protos("src/api/api.proto").unwrap();
-    protobuf_codegen_pure::Codegen::new()
+    let customize = Customize::default()
+        .gen_mod_rs(false)
+        .tokio_bytes(true)
+        .generate_getter(true);
+    protobuf_codegen::Codegen::new()
         .out_dir("src/")
-        .customize(Customize {
-            expose_oneof: None,
-            expose_fields: None,
-            generate_accessors: None,
-            carllerche_bytes_for_bytes: Some(true),
-            carllerche_bytes_for_string: None,
-            serde_derive: None,
-            serde_derive_cfg: None,
-            serde_rename_all: None,
-            lite_runtime: None,
-            gen_mod_rs: None,
-            inside_protobuf: None,
-            _future_options: (),
-        })
+        .customize(customize)
         .inputs(&["src/config/geoip.proto", "src/config/geosite.proto"])
         .include(".")
         .out_dir("src/config/")

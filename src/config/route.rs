@@ -17,10 +17,28 @@ use std::fs::File;
 use std::io;
 
 use crate::config::utils::KeepInsertOrderMap;
+use protobuf::rt::WireType;
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::Path;
 
 use super::ip_trie::GeoIPMatcher;
+const TAG_TYPE_BITS: u32 = 3;
+const TAG_TYPE_MASK: u32 = (1u32 << TAG_TYPE_BITS as usize) - 1;
+
+fn to_field_num_and_wire_type(value: u32) -> io::Result<(u32, WireType)> {
+    let wire_type = WireType::new(value & TAG_TYPE_MASK);
+    if wire_type.is_none() {
+        return Err(new_error(format!(
+            "unexpected wire type: {}",
+            value & TAG_TYPE_MASK
+        )));
+    }
+    let field_number = value >> TAG_TYPE_BITS;
+    if field_number == 0 {
+        return Err(new_error("unexpected field number: 0"));
+    }
+    Ok((field_number, wire_type.unwrap()))
+}
 
 pub(super) struct RouterBuilder {
     domain_matchers: KeepInsertOrderMap<Box<dyn DomainMatcher>>,
@@ -129,10 +147,11 @@ impl RouterBuilder {
         let mut site_group_tag = String::new();
         let mut skip_field = None;
         while !is.eof()? {
-            is.read_tag_unpack()?;
+            is.read_raw_varint32()?;
             is.read_raw_varint64()?;
             while !is.eof().unwrap() {
-                let (field_number, wire_type) = is.read_tag_unpack()?;
+                let (field_number, wire_type) =
+                    to_field_num_and_wire_type(is.read_raw_varint32()?)?;
                 match field_number {
                     1 => {
                         if !site_group_tag.is_empty() {
@@ -152,30 +171,22 @@ impl RouterBuilder {
                         {
                             if let Some(outbound_tag) = skip_field {
                                 let matcher = self.domain_matchers.get_mut(*outbound_tag).unwrap();
-                                {
-                                    match domain.field_type {
-                                        geosite::Domain_Type::Plain => matcher.reverse_insert(
-                                            domain.get_value(),
-                                            MatchType::SubStr(true),
-                                        ),
-                                        geosite::Domain_Type::Domain => matcher.reverse_insert(
-                                            domain.get_value(),
-                                            MatchType::Domain(true),
-                                        ),
-                                        geosite::Domain_Type::Full => matcher.reverse_insert(
-                                            domain.get_value(),
-                                            MatchType::Full(true),
-                                        ),
-                                        _ => {
-                                            if let Some(regex_exprs) =
-                                                self.regex_matchers.get_mut(*outbound_tag)
-                                            {
-                                                regex_exprs.push(domain.get_value().to_string())
-                                            } else {
-                                                let regex_exprs = vec![domain.value];
-                                                self.regex_matchers
-                                                    .insert(outbound_tag.to_string(), regex_exprs);
-                                            }
+                                match domain.type_() {
+                                    geosite::domain::Type::Plain => matcher
+                                        .reverse_insert(domain.value(), MatchType::SubStr(true)),
+                                    geosite::domain::Type::Domain => matcher
+                                        .reverse_insert(domain.value(), MatchType::Domain(true)),
+                                    geosite::domain::Type::Full => matcher
+                                        .reverse_insert(domain.value(), MatchType::Full(true)),
+                                    _ => {
+                                        if let Some(regex_exprs) =
+                                            self.regex_matchers.get_mut(*outbound_tag)
+                                        {
+                                            regex_exprs.push(domain.value().to_string())
+                                        } else {
+                                            let regex_exprs = vec![domain.value];
+                                            self.regex_matchers
+                                                .insert(outbound_tag.to_string(), regex_exprs);
                                         }
                                     }
                                 }
@@ -218,11 +229,12 @@ impl RouterBuilder {
         let mut country_code = String::new();
         let mut skip_field: bool = false;
         while !is.eof()? {
-            is.read_tag_unpack()?;
+            is.read_raw_varint32()?;
             // assert_eq!(field_number, 1);
             is.read_raw_varint64()?;
             while !is.eof()? {
-                let (field_number, wire_type) = is.read_tag_unpack()?;
+                let (field_number, wire_type) =
+                    to_field_num_and_wire_type(is.read_raw_varint32()?)?;
                 match field_number {
                     1 => {
                         if !country_code.is_empty() {
