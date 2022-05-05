@@ -35,10 +35,7 @@ impl StatsService for ApiServer {
                 ret_v = v.load(Relaxed);
             }
         } else {
-            return Err(tonic::Status::new(
-                tonic::Code::InvalidArgument,
-                "name is invalid",
-            ));
+            return Err(Status::new(tonic::Code::InvalidArgument, "name is invalid"));
         }
         Ok(Response::new(v2ray_rust_api::GetStatsResponse {
             stat: Some(v2ray_rust_api::Stat {

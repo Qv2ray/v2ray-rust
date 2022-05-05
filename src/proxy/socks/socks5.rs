@@ -51,7 +51,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
         if header[0] != SOCKS_VERSION {
             self.stream.shutdown().await?;
             return Err(Error::new(
-                std::io::ErrorKind::Other,
+                io::ErrorKind::Other,
                 format!("socks version {:#x} is not supported", header[0]),
             ));
         } else {
@@ -98,7 +98,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                             self.stream.write_all(&response).await?;
                             self.stream.shutdown().await?;
                             return Err(Error::new(
-                                std::io::ErrorKind::Other,
+                                io::ErrorKind::Other,
                                 "socks5 client auth failure",
                             ));
                         }
@@ -112,7 +112,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                 self.stream.write_all(&response).await?;
                 self.stream.shutdown().await?;
                 return Err(Error::new(
-                    std::io::ErrorKind::Other,
+                    io::ErrorKind::Other,
                     "socks5 client auth failure",
                 ));
             }
@@ -121,7 +121,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
         self.stream.read_exact(&mut buf).await?;
         if buf[0] != SOCKS_VERSION {
             return Err(Error::new(
-                std::io::ErrorKind::Other,
+                io::ErrorKind::Other,
                 format!("socks version {:#x} is not supported", buf[0]),
             ));
         }
@@ -162,7 +162,7 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
                 address.write_to_buf(&mut self.read_buf);
                 self.stream.write_all(&self.read_buf).await?;
                 return Err(Error::new(
-                    std::io::ErrorKind::Other,
+                    io::ErrorKind::Other,
                     format!("socks command {:#x} is not supported", buf[1]),
                 ));
             }
@@ -298,7 +298,7 @@ impl Socks5UdpDatagram {
                     nat.insert(ob, read_handle, write_handle, tx);
                 }
             }
-            Ok::<(), io::Error>(())
+            Ok::<(), Error>(())
         });
         let local_send_handle = actix_rt::spawn(async move {
             let local_addr = local_addr_receiver
@@ -315,7 +315,7 @@ impl Socks5UdpDatagram {
                 w.feed(((buf.freeze(), from_addr), local_addr)).await?;
                 w.flush().await?;
             }
-            Ok::<(), io::Error>(())
+            Ok::<(), Error>(())
         });
         let mut buf = [0u8; 0x10];
         let _ = stream.read(&mut buf).await;
@@ -338,7 +338,7 @@ impl Socks5UdpDatagram {
 pub struct Socks5UdpCodec;
 
 impl Encoder<(Bytes, Address)> for Socks5UdpCodec {
-    type Error = io::Error;
+    type Error = Error;
 
     fn encode(&mut self, item: (Bytes, Address), dst: &mut BytesMut) -> Result<(), Self::Error> {
         dst.reserve(3 + item.1.serialized_len() + item.0.len());
@@ -351,7 +351,7 @@ impl Encoder<(Bytes, Address)> for Socks5UdpCodec {
 
 impl Decoder for Socks5UdpCodec {
     type Item = (Address, BytesMut);
-    type Error = io::Error;
+    type Error = Error;
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         if src.len() < 3 {

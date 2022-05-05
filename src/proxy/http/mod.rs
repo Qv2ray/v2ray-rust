@@ -126,7 +126,7 @@ async fn tunnel(
     in_counter_up: Option<&'static AtomicU64>,
     in_counter_down: Option<&'static AtomicU64>,
     relay_buffer_size: usize,
-) -> std::io::Result<()> {
+) -> io::Result<()> {
     // Connect to remote server
     let ob = router.match_addr(&addr);
     let stream_builder = inner_map.get(ob).unwrap();

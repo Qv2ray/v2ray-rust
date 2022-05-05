@@ -74,7 +74,7 @@ impl AsyncRead for ConnectedUdpSocket {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
+    ) -> Poll<io::Result<()>> {
         let this = self.get_mut();
         this.0.poll_recv_from(cx, buf).map_ok(|_| ())
     }
@@ -324,17 +324,17 @@ impl<T: AsyncWrite> AsyncWrite for WriteHalfExt<T> {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &[u8],
-    ) -> Poll<Result<usize, io::Error>> {
+    ) -> Poll<Result<usize, Error>> {
         let mut inner = ready!(self.inner.poll_lock(cx));
         inner.stream_pin().poll_write(cx, buf)
     }
 
-    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let mut inner = ready!(self.inner.poll_lock(cx));
         inner.stream_pin().poll_flush(cx)
     }
 
-    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), Error>> {
         let mut inner = ready!(self.inner.poll_lock(cx));
         inner.stream_pin().poll_shutdown(cx)
     }

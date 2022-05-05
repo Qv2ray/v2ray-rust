@@ -85,9 +85,9 @@ impl<T: Default + Copy> PollUtil for Poll<io::Result<T>> {
 
     fn get_poll_res(&self) -> Self::T {
         match self {
-            Poll::Ready(Err(_)) => Self::T::default(),
+            Poll::Ready(Err(_)) => T::default(),
             Poll::Ready(Ok(t)) => *t,
-            Poll::Pending => Self::T::default(),
+            Poll::Pending => T::default(),
         }
     }
 }

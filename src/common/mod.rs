@@ -16,7 +16,7 @@ pub const AES_128_GCM_TAG_LEN: usize = 16;
 pub fn new_error<T: ToString>(message: T) -> io::Error {
     debug_log!("new error message:{}", message.to_string());
     return io::Error::new(
-        std::io::ErrorKind::Other,
+        io::ErrorKind::Other,
         format!("Error: {}", message.to_string()),
     );
 }

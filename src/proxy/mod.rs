@@ -104,7 +104,7 @@ pub trait UdpRead {
     fn poll_recv_from(
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-        _buf: &mut tokio::io::ReadBuf<'_>,
+        _buf: &mut ReadBuf<'_>,
     ) -> Poll<io::Result<Address>> {
         unimplemented!()
     }

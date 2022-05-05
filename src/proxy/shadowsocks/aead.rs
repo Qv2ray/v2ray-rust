@@ -84,10 +84,7 @@ impl DecryptedReader {
                 .cipher
                 .decrypt(&mut self.buffer.as_mut()[0..self.data_length])
             {
-                return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "invalid aead tag",
-                )));
+                return Poll::Ready(Err(io::Error::new(ErrorKind::Other, "invalid aead tag")));
             }
             self.data_length -= self.tag_size;
             while self.calc_data_to_put(dst) != 0 {
@@ -185,7 +182,7 @@ impl EncryptedWriter {
             self.pos += n;
             if n == 0 {
                 return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::WriteZero,
+                    ErrorKind::WriteZero,
                     "write zero byte into writer",
                 )));
             }

@@ -22,7 +22,7 @@ where
         "aes-128-gcm" => CipherKind::Aes128Gcm,
         "aes-256-gcm" => CipherKind::Aes256Gcm,
         "chacha20-ietf-poly1305" | "chacha20-poly1305" => CipherKind::ChaCha20Poly1305,
-        _ => return Err(D::Error::custom("wrong ss encryption method")),
+        _ => return Err(Error::custom("wrong ss encryption method")),
     };
     Ok(method)
 }
@@ -32,7 +32,7 @@ where
 {
     let addr: &str = Deserialize::deserialize(deserializer)?;
     addr.parse()
-        .map_err(|e: AddressError| D::Error::custom(e.as_str()))
+        .map_err(|e: AddressError| Error::custom(e.as_str()))
 }
 pub(super) fn from_str_to_option_address<'de, D>(
     deserializer: D,
@@ -55,7 +55,7 @@ where
         security_num = 0x04;
     } else if security == "none" || security == "zero" {
         let msg = format!("not support vmess security type:{}", security);
-        return Err(D::Error::custom(msg.as_str()));
+        return Err(Error::custom(msg.as_str()));
     } else if security == "auto" {
         #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
         {
@@ -67,7 +67,7 @@ where
         }
     } else {
         let msg = format!("unknown vmess security type {}", security);
-        return Err(D::Error::custom(msg.as_str()));
+        return Err(Error::custom(msg.as_str()));
     };
     Ok(security_num)
 }
@@ -77,7 +77,7 @@ where
     D: Deserializer<'de>,
 {
     let uuid_str: &str = Deserialize::deserialize(deserializer)?;
-    Uuid::parse_str(uuid_str).map_err(D::Error::custom)
+    Uuid::parse_str(uuid_str).map_err(Error::custom)
 }
 
 #[derive(Clone)]
@@ -174,7 +174,7 @@ where
     D: Deserializer<'de>,
 {
     let path_and_query: &str = Deserialize::deserialize(deserializer)?;
-    path_and_query.try_into().map_err(D::Error::custom)
+    path_and_query.try_into().map_err(Error::custom)
 }
 
 pub(super) fn from_str_to_grpc_path<'de, D>(deserializer: D) -> Result<PathAndQuery, D::Error>
@@ -183,7 +183,7 @@ where
 {
     let service_name: &str = Deserialize::deserialize(deserializer)?;
     let path_and_query = format!("/{}/Tun", service_name);
-    path_and_query.try_into().map_err(D::Error::custom)
+    path_and_query.try_into().map_err(Error::custom)
 }
 
 pub(super) fn from_str_to_http_method<'de, D>(deserializer: D) -> Result<Method, D::Error>
@@ -191,7 +191,7 @@ where
     D: Deserializer<'de>,
 {
     let method: &str = Deserialize::deserialize(deserializer)?;
-    method.try_into().map_err(D::Error::custom)
+    method.try_into().map_err(Error::custom)
 }
 
 pub(super) fn from_str_to_ws_uri<'de, D>(deserializer: D) -> Result<EarlyDataUri, D::Error>
@@ -199,7 +199,7 @@ where
     D: Deserializer<'de>,
 {
     let uri: &str = Deserialize::deserialize(deserializer)?;
-    EarlyDataUri::new(uri).map_err(D::Error::custom)
+    EarlyDataUri::new(uri).map_err(Error::custom)
 }
 
 // adapted from webpki::DnsNameRef
@@ -295,7 +295,7 @@ where
     if is_valid_dns_id(sni.as_bytes()) {
         Ok(sni.to_owned())
     } else {
-        Err(D::Error::custom("Not a valid sni string"))
+        Err(Error::custom("Not a valid sni string"))
     }
 }
 pub(super) fn default_grpc_path() -> PathAndQuery {
@@ -316,8 +316,8 @@ pub(super) fn default_random_string() -> String {
 }
 
 #[inline]
-pub(super) fn default_http2_method() -> http::Method {
-    http::Method::PUT
+pub(super) fn default_http2_method() -> Method {
+    Method::PUT
 }
 
 fn default_v2ray_asset_path(file_name: &str) -> PathBuf {
@@ -325,7 +325,7 @@ fn default_v2ray_asset_path(file_name: &str) -> PathBuf {
         .or_else(|_| env::var("V2RAY_LOCATION_ASSET"))
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
-            let mut path_buf = std::env::current_exe().unwrap_or_default();
+            let mut path_buf = env::current_exe().unwrap_or_default();
             path_buf.pop();
             path_buf
         });

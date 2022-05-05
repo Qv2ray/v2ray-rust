@@ -80,7 +80,7 @@ macro_rules! http2_build_tcp_impl {
 
 #[async_trait]
 impl ChainableStreamBuilder for Http2StreamBuilder {
-    async fn build_tcp(&self, io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
+    async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
         http2_build_tcp_impl!(self, io);
     }
 
@@ -88,7 +88,7 @@ impl ChainableStreamBuilder for Http2StreamBuilder {
         &self,
         io: BoxProxyUdpStream,
         build_tcp_inside: bool,
-    ) -> std::io::Result<BoxProxyUdpStream> {
+    ) -> io::Result<BoxProxyUdpStream> {
         if build_tcp_inside {
             http2_build_tcp_impl!(self, io);
         } else {

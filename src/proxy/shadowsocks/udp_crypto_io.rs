@@ -110,8 +110,7 @@ pub fn decrypt_payload(
                     Ok((payload.len() - pos, address))
                 }
                 Err(..) => {
-                    let err =
-                        io::Error::new(ErrorKind::InvalidData, "parse udp packet Address failed");
+                    let err = Error::new(ErrorKind::InvalidData, "parse udp packet Address failed");
                     Err(err)
                 }
             }
@@ -129,7 +128,7 @@ fn decrypt_payload_aead(
     let plen = payload.len();
     let salt_len = method.salt_len();
     if plen < salt_len {
-        let err = io::Error::new(ErrorKind::InvalidData, "udp packet too short for salt");
+        let err = Error::new(ErrorKind::InvalidData, "udp packet too short for salt");
         return Err(err);
     }
 
@@ -142,14 +141,11 @@ fn decrypt_payload_aead(
     let mut cipher = AeadCipher::new(method, key, salt);
 
     if data.len() < tag_len {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            "udp packet too short for tag",
-        ));
+        return Err(Error::new(ErrorKind::Other, "udp packet too short for tag"));
     }
 
     if !cipher.decrypt(data) {
-        return Err(io::Error::new(io::ErrorKind::Other, "invalid tag-in"));
+        return Err(Error::new(ErrorKind::Other, "invalid tag-in"));
     }
 
     // Truncate TAG
@@ -175,7 +171,7 @@ fn parse_packet(buf: &[u8]) -> io::Result<(usize, Address)> {
             Ok((pos, address))
         }
         Err(..) => {
-            let err = io::Error::new(ErrorKind::InvalidData, "parse udp packet Address failed");
+            let err = Error::new(ErrorKind::InvalidData, "parse udp packet Address failed");
             Err(err)
         }
     }

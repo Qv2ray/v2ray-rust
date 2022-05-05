@@ -20,7 +20,7 @@ pub struct VmessBuilder {
 
 #[async_trait]
 impl ChainableStreamBuilder for VmessBuilder {
-    async fn build_tcp(&self, io: BoxProxyStream) -> std::io::Result<BoxProxyStream> {
+    async fn build_tcp(&self, io: BoxProxyStream) -> io::Result<BoxProxyStream> {
         debug_log!("build vmess tcp");
         let opt = self.vmess_option.clone();
         Ok(Box::new(VmessStream::new(opt, io)))

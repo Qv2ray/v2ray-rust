@@ -52,7 +52,7 @@ impl BinaryWsStreamWithEarlyData {
         io: BoxProxyStream,
         req: Request<()>,
         config: Option<WebSocketConfig>,
-    ) -> Pin<Box<dyn std::future::Future<Output = io::Result<BoxProxyStream>> + Send>> {
+    ) -> Pin<Box<dyn Future<Output = io::Result<BoxProxyStream>> + Send>> {
         async fn run(
             io: BoxProxyStream,
             req: Request<()>,
@@ -78,7 +78,7 @@ impl AsyncRead for BinaryWsStreamWithEarlyData {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
         buf: &mut ReadBuf<'_>,
-    ) -> Poll<std::io::Result<()>> {
+    ) -> Poll<io::Result<()>> {
         debug_log!("ws-0-rtt poll r");
         if !self.is_write_early_data {
             if self.early_waker.is_none() {

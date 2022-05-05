@@ -96,8 +96,8 @@ jobs:
         restore-keys: |
           index-${{ runner.os }}-
 
-    - name: Create lockfile
-      run: cargo generate-lockfile
+          #    - name: Create lockfile
+          #      run: cargo generate-lockfile
       
     - name: Cache cargo registry
       uses: actions/cache@v3.0.2

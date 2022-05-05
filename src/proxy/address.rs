@@ -30,9 +30,9 @@ impl AddressError {
     }
 }
 
-impl From<AddressError> for io::Error {
+impl From<AddressError> for Error {
     fn from(e: AddressError) -> Self {
-        io::Error::new(ErrorKind::Other, format!("address error: {}", e.message))
+        Error::new(ErrorKind::Other, format!("address error: {}", e.message))
     }
 }
 impl Default for Address {
@@ -153,7 +153,7 @@ impl Address {
                 let addr = match String::from_utf8(domain_buf.to_vec()) {
                     Ok(addr) => addr,
                     Err(..) => {
-                        return Err(Error::new(io::ErrorKind::Other, "invalid address encoding"))
+                        return Err(Error::new(ErrorKind::Other, "invalid address encoding"))
                     }
                 };
                 let mut port_buf = &addr_buf[length..length + 2];
@@ -164,7 +164,7 @@ impl Address {
             _ => {
                 // Wrong Address Type . Socks5 only supports ipv4, ipv6 and domain name
                 Err(Error::new(
-                    io::ErrorKind::Other,
+                    ErrorKind::Other,
                     format!("not supported address type {:#x}", addr_type),
                 ))
             }

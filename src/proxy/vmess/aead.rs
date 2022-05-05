@@ -139,7 +139,7 @@ impl VmessAeadWriter {
             self.pos += n;
             if n == 0 {
                 return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::WriteZero,
+                    ErrorKind::WriteZero,
                     "write zero byte into writer",
                 )));
             }
@@ -243,10 +243,7 @@ impl VmessAeadReader {
             // 4. decrypted data, includes aead tag
             if !self.decrypted_data() {
                 debug_log!("read decrypted failed");
-                return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "invalid aead tag",
-                )));
+                return Poll::Ready(Err(io::Error::new(ErrorKind::Other, "invalid aead tag")));
             }
             self.count += 1;
 

@@ -248,8 +248,8 @@ impl TrojanUdpReader {
                 0x4 => 1 + 16 + 2 + 4,
                 0x3 => 2 + self.buffer[1] as usize + 2 + 4,
                 _ => {
-                    return Err(std::io::Error::new(
-                        io::ErrorKind::Other,
+                    return Err(io::Error::new(
+                        ErrorKind::Other,
                         format!("not supported address type {:#x}", self.buffer[0]),
                     ))
                     .into();
@@ -325,7 +325,7 @@ impl TrojanUdpWriter {
             self.pos += n;
             if n == 0 {
                 return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::WriteZero,
+                    ErrorKind::WriteZero,
                     "write zero byte into writer",
                 )));
             }
@@ -343,7 +343,7 @@ impl TrojanUdpWriter {
             self.pos += n;
             if n == 0 {
                 return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::WriteZero,
+                    ErrorKind::WriteZero,
                     "write zero byte into writer",
                 )));
             }

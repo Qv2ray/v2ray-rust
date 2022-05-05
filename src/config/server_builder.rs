@@ -93,7 +93,7 @@ impl ConfigServerBuilder {
         {
             actix_rt::System::new().block_on(async move {
                 if enable_api_server {
-                    log::info!("api server listening on: {}", self.api_server_addr);
+                    info!("api server listening on: {}", self.api_server_addr);
                     tokio::spawn(async move {
                         let api_server = ApiServer::new_server();
                         tonic::transport::Server::builder()
@@ -245,9 +245,9 @@ impl ConfigServerBuilder {
                 }
                 let res = server.run().await;
                 if let Err(ref e) = res {
-                    log::info!("v2ray-rust stopped: {}", e);
+                    info!("v2ray-rust stopped: {}", e);
                 } else {
-                    log::info!("v2ray-rust stopped");
+                    info!("v2ray-rust stopped");
                 }
                 res
             })
