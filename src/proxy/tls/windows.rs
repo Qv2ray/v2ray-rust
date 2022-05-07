@@ -18,7 +18,7 @@ pub fn load_native_certs() -> io::Result<Vec<X509>> {
     let current_user_store = schannel::cert_store::CertStore::open_current_user("Root")?;
 
     for cert in current_user_store.certs() {
-        if usable_for_rustls(cert.valid_uses().unwrap()) {
+        if usable_for_rustls(cert.valid_uses().unwrap()) && cert.is_time_valid().unwrap() {
             certs.push(X509::from_der(cert.to_der()).map_err(new_error)?);
         }
     }
