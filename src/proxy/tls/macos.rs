@@ -50,7 +50,7 @@ pub fn load_native_certs() -> io::Result<Vec<X509>> {
     for (der, trusted) in all_certs.drain() {
         use TrustSettingsForCertificate::*;
         if let TrustRoot | TrustAsRoot = trusted {
-            certs.push(X509::from_der(der).map_err(new_error)?);
+            certs.push(X509::from_der(&der).map_err(new_error)?);
         }
     }
 
