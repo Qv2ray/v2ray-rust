@@ -12,6 +12,10 @@ use std::io;
 
 use tokio_boring::{connect, SslStream};
 
+#[cfg(target_os = "macos")]
+use super::macos as platform;
+#[cfg(all(unix, not(target_os = "macos")))]
+use super::unix as platform;
 #[cfg(windows)]
 use super::windows as platform;
 
@@ -31,9 +35,8 @@ impl TlsStreamBuilder {
         verify_sni: bool,
     ) -> Self {
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
-        #[cfg(windows)]
         {
-            log::debug!("start add windows system cert");
+            log::debug!("start add system cert");
             let certs = platform::load_native_certs().unwrap();
             log::debug!("certs len:{}", certs.len());
             let mut count = 0;
@@ -42,7 +45,7 @@ impl TlsStreamBuilder {
                 if err.is_ok() {
                     count += 1;
                 }
-                log::debug!("add windows system cert:{}", count);
+                log::debug!("add system cert:{}", count);
             }
             log::debug!("add cert done");
         }
@@ -171,85 +174,27 @@ extern "C" fn decompress_ssl_cert(
     }
 }
 
-//#[cfg(all(target_os = "linux", test))]
 #[cfg(test)]
 mod tests {
     use crate::proxy::tls::tls_stream::TlsStreamBuilder;
     use crate::proxy::ChainableStreamBuilder;
-    use boring::ssl::SslMethod;
-    use boring::ssl::{SslConnector, SslSignatureAlgorithm};
-    use std::io;
     use std::net::ToSocketAddrs;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
 
-    #[cfg(windows)]
-    use crate::proxy::tls::windows as platform;
-
-    use super::decompress_ssl_cert;
-    fn new(sni: &str) -> io::Result<TlsStreamBuilder> {
-        let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
-        #[cfg(windows)]
-        {
-            let certs = platform::load_native_certs().unwrap();
-            let mut count = 0;
-            for cert in certs.into_iter() {
-                let err = configuration.cert_store_mut().add_cert(cert);
-                if err.is_ok() {
-                    count += 1;
-                }
-            }
-        }
-        configuration
-            .set_alpn_protos(b"\x02h2\x08http/1.1")
-            .unwrap();
-        configuration
-            .set_cipher_list("ALL:!aPSK:!ECDSA+SHA1:!3DES")
-            .unwrap();
-        configuration
-            .set_verify_algorithm_prefs(&[
-                SslSignatureAlgorithm::ECDSA_SECP256R1_SHA256,
-                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA256,
-                SslSignatureAlgorithm::RSA_PKCS1_SHA256,
-                SslSignatureAlgorithm::ECDSA_SECP384R1_SHA384,
-                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA384,
-                SslSignatureAlgorithm::RSA_PKCS1_SHA384,
-                SslSignatureAlgorithm::RSA_PSS_RSAE_SHA512,
-                SslSignatureAlgorithm::RSA_PKCS1_SHA512,
-            ])
-            .unwrap();
-        configuration.enable_signed_cert_timestamps();
-        configuration.enable_ocsp_stapling();
-        configuration.set_grease_enabled(true);
-        unsafe {
-            boring_sys::SSL_CTX_add_cert_compression_alg(
-                configuration.as_ptr(),
-                boring_sys::TLSEXT_cert_compression_brotli as u16,
-                None,
-                Some(decompress_ssl_cert),
-            );
-        }
-        Ok(TlsStreamBuilder {
-            connector: configuration.build(),
-            sni: sni.to_string(),
-            verify_hostname: true,
-            verify_sni: true,
-        })
-    }
-
     #[tokio::test]
     async fn test_tls() {
-        let b = "ja3er.com:443";
+        let b = "google.com:443";
         let addr = b.to_socket_addrs().unwrap().next().unwrap();
         let stream = TcpStream::connect(&addr).await.unwrap();
         println!("local:{}", stream.local_addr().unwrap());
-        let b = new("ja3er.com").unwrap();
+        let b = TlsStreamBuilder::new_from_config("google.com".to_string(), &None, true, true);
         let mut stream = b.build_tcp(Box::new(stream)).await.unwrap();
-        stream.write_all(b"GET /json HTTP/1.1\r\nHost: ja3er.com\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36\r\n\r\n").await.unwrap();
+        stream.write_all(b"GET /json HTTP/1.1\r\nHost: google.com\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36\r\n\r\n").await.unwrap();
         let mut buf = vec![0u8; 1024];
         stream.read_buf(&mut buf).await.unwrap();
         let response = String::from_utf8_lossy(&buf);
         let response = response.trim_end();
-        println!("from ja3er response:{}", response);
+        println!("from google response:{}", response);
     }
 }
