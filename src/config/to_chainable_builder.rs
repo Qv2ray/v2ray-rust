@@ -97,7 +97,6 @@ impl ToChainableStreamBuilder for TlsConfig {
         Box::new(TlsStreamBuilder::new_from_config(
             self.sni.clone(),
             &self.cert_file,
-            &self.key_file,
             self.verify_hostname,
             self.verify_sni,
         ))

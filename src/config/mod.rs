@@ -66,7 +66,6 @@ struct TlsConfig {
     #[serde(deserialize_with = "from_str_to_sni")]
     sni: String,
     cert_file: Option<String>,
-    key_file: Option<String>,
     #[serde(default = "default_true")]
     verify_hostname: bool,
     #[serde(default = "default_true")]

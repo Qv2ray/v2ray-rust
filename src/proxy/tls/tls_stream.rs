@@ -7,10 +7,13 @@ use crate::proxy::{
 use async_trait::async_trait;
 
 use boring::ssl::SslMethod;
-use boring::ssl::{SslConnector, SslFiletype, SslSignatureAlgorithm};
+use boring::ssl::{SslConnector, SslSignatureAlgorithm};
 use std::io;
 
 use tokio_boring::{connect, SslStream};
+
+#[cfg(windows)]
+use super::windows as platform;
 
 #[derive(Clone)]
 pub struct TlsStreamBuilder {
@@ -24,20 +27,28 @@ impl TlsStreamBuilder {
     pub fn new_from_config(
         sni: String,
         cert_file: &Option<String>,
-        key_file: &Option<String>,
         verify_hostname: bool,
         verify_sni: bool,
     ) -> Self {
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
-        if let Some(cert_file) = cert_file {
-            configuration
-                .set_certificate_file(cert_file, SslFiletype::PEM)
-                .unwrap();
+        #[cfg(windows)]
+        {
+            log::debug!("start add windows system cert");
+            let certs = platform::load_native_certs().unwrap();
+            log::debug!("certs len:{}", certs.len());
+            let mut count = 0;
+            for cert in certs.into_iter() {
+                let err = configuration.cert_store_mut().add_cert(cert);
+                if err.is_ok() {
+                    count += 1;
+                }
+                log::debug!("add windows system cert:{}", count);
+            }
+            log::debug!("add cert done");
         }
-        if let Some(key_file) = key_file {
-            configuration
-                .set_private_key_file(key_file, SslFiletype::PEM)
-                .unwrap();
+        if let Some(cert_file) = cert_file {
+            debug_log!("load custom ca file");
+            configuration.set_ca_file(cert_file).unwrap();
         }
         configuration
             .set_alpn_protos(b"\x02h2\x08http/1.1")
@@ -160,7 +171,8 @@ extern "C" fn decompress_ssl_cert(
     }
 }
 
-#[cfg(all(target_os = "linux", test))]
+//#[cfg(all(target_os = "linux", test))]
+#[cfg(test)]
 mod tests {
     use crate::proxy::tls::tls_stream::TlsStreamBuilder;
     use crate::proxy::ChainableStreamBuilder;
@@ -171,9 +183,23 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpStream;
 
+    #[cfg(windows)]
+    use crate::proxy::tls::windows as platform;
+
     use super::decompress_ssl_cert;
     fn new(sni: &str) -> io::Result<TlsStreamBuilder> {
         let mut configuration = SslConnector::builder(SslMethod::tls()).unwrap();
+        #[cfg(windows)]
+        {
+            let certs = platform::load_native_certs().unwrap();
+            let mut count = 0;
+            for cert in certs.into_iter() {
+                let err = configuration.cert_store_mut().add_cert(cert);
+                if err.is_ok() {
+                    count += 1;
+                }
+            }
+        }
         configuration
             .set_alpn_protos(b"\x02h2\x08http/1.1")
             .unwrap();

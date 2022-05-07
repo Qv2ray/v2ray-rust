@@ -38,6 +38,11 @@ tag = "t"
 uri = "ws://127.0.0.1:10002/?ed=2048"
 tag = "w"
 
+[[tls]]
+sni = "localhost"
+cert_file = "cert.pem"
+tag = "tls"
+
 [[direct]]
 tag = "d"
 
@@ -52,7 +57,7 @@ host = "127.0.0.1:10002"
 service_name = "gungungun"
 
 [[outbounds]]
-chain = ["grpc","v"]
+chain = ["tls","v"]
 #chain = ["h2","v"]
 # chain = ["w","v","ss2"]
 # chain = ["t","w","v"]

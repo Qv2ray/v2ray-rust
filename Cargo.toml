@@ -73,3 +73,6 @@ strip = true
 [build-dependencies]
 protobuf-codegen = "3.0.1"
 tonic-build = "0.7"
+
+[target.'cfg(windows)'.dependencies]
+schannel = "0.1.19"
