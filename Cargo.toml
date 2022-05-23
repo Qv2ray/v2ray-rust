@@ -75,7 +75,7 @@ protobuf-codegen = "3.0.1"
 tonic-build = "0.7"
 
 [target.'cfg(windows)'.dependencies]
-schannel = "0.1.19"
+schannel = "0.1.20"
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 openssl-probe = "0.1.5"
