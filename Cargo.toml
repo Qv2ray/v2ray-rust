@@ -41,7 +41,7 @@ md-5 = "0.10.0"
 prost = "0.10"
 protobuf = {version = "3.0.1", features = ["with-bytes"]}
 rand = {version = "0.8", features = ["small_rng"]}
-regex = "1.5.5"
+regex = "1.5.6"
 serde = {version = "1.0", features = ["derive"]}
 sha-1 = "0.10.0"
 sha2 = "0.10.1"
