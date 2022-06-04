@@ -47,7 +47,7 @@ sha-1 = "0.10.0"
 sha2 = "0.10.1"
 socket2 = {version = "0.4.5", features = ["all"]}
 spin = "0.9.2"
-tokio = {version = "1.18", features = ["net", "io-util", "macros", "sync"]}
+tokio = {version = "1.19", features = ["net", "io-util", "macros", "sync"]}
 tokio-boring = "2.1.4"
 tokio-tungstenite = {version = "0.17", features = ["stream"], default-features = false}
 tokio-util = {version = "0.7", features = ["codec", "net"]}
