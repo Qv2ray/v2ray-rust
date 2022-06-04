@@ -71,7 +71,7 @@ opt-level = 3
 strip = true
 
 [build-dependencies]
-protobuf-codegen = "3.0.1"
+protobuf-codegen = "3.0.3"
 tonic-build = "0.7"
 
 [target.'cfg(windows)'.dependencies]
