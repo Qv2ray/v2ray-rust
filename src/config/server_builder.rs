@@ -2,7 +2,7 @@ use crate::api::ApiServer;
 use crate::common::net::{relay, relay_with_atomic_counter};
 use crate::config::{DokodemoDoor, Inbounds, Router};
 use crate::proxy::dokodemo_door::build_dokodemo_door_listener;
-use crate::proxy::http::serve_http_conn;
+use crate::proxy::http::HttpInbound;
 use crate::proxy::socks::socks5::{Socks5Stream, Socks5UdpDatagram};
 use crate::proxy::socks::SOCKS_VERSION;
 use crate::proxy::{Address, ChainStreamBuilder};
@@ -178,27 +178,28 @@ impl ConfigServerBuilder {
                         in_down = Some(COUNTER_MAP.get().unwrap().get(down.as_str()).unwrap());
                         in_up = Some(COUNTER_MAP.get().unwrap().get(up.as_str()).unwrap());
                     }
+                    let http_inbound = HttpInbound::new(
+                        inner_map.clone(),
+                        router.clone(),
+                        enable_api_server,
+                        in_up,
+                        in_down,
+                        self.relay_buffer_size,
+                    );
 
                     server = server.bind("in", inbound.addr.to_string(), move || {
                         let inner_map = inner_map_1.clone();
                         let router = router_1.clone();
+                        let http_inbound = http_inbound.clone();
                         fn_service(move |io: TcpStream| {
                             let inner_map = inner_map.clone();
                             let router = router.clone();
+                            let http_inbound = http_inbound.clone();
                             async move {
                                 let mut header = [0u8; 1];
                                 io.peek(&mut header).await?;
                                 if header[0] != SOCKS_VERSION {
-                                    return serve_http_conn(
-                                        io,
-                                        inner_map,
-                                        router,
-                                        enable_api_server,
-                                        in_up,
-                                        in_down,
-                                        self.relay_buffer_size,
-                                    )
-                                    .await;
+                                    return http_inbound.serve_http_conn(io).await;
                                 }
                                 let peer_ip = io.peer_addr()?.ip();
                                 let addr = if enable_udp {

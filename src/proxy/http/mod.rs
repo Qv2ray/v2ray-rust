@@ -1,3 +1,5 @@
+mod connector;
+use http::{header, StatusCode};
 use hyper::server::conn::Http;
 use std::collections::HashMap;
 use std::io;
@@ -13,50 +15,84 @@ use crate::debug_log;
 use crate::proxy::{Address, ChainStreamBuilder};
 use hyper::service::service_fn;
 use hyper::upgrade::Upgraded;
-use hyper::{Body, Method, Request, Response};
+use hyper::{Body, Client, Method, Request, Response};
 use log::info;
 
-pub async fn serve_http_conn(
-    io: TcpStream,
+use self::connector::Connector;
+
+#[derive(Clone)]
+pub struct HttpInbound {
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
+    client: Client<Connector>,
     enable_api_server: bool,
     in_counter_up: Option<&'static AtomicU64>,
     in_counter_down: Option<&'static AtomicU64>,
     relay_buffer_size: usize,
-) -> io::Result<()> {
-    let mut http_conn = Http::new();
-    http_conn
-        .http1_preserve_header_case(true)
-        .http1_preserve_header_case(true);
-    let conn = http_conn
-        .serve_connection(
-            io,
-            service_fn(|req| {
-                let inner_map = inner_map.clone();
-                let router = router.clone();
-                async move {
-                    proxy(
-                        req,
-                        inner_map,
-                        router,
-                        enable_api_server,
-                        in_counter_up,
-                        in_counter_down,
-                        relay_buffer_size,
-                    )
-                    .await
-                }
-            }),
-        )
-        .with_upgrades();
-    if let Err(e) = conn.await {
-        return Err(new_error(e));
+}
+impl HttpInbound {
+    pub fn new(
+        inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
+        router: Arc<Router>,
+        enable_api_server: bool,
+        in_counter_up: Option<&'static AtomicU64>,
+        in_counter_down: Option<&'static AtomicU64>,
+        relay_buffer_size: usize,
+    ) -> Self {
+        let client = Client::builder().build(Connector::new(inner_map.clone(), router.clone()));
+        Self {
+            client,
+            router,
+            enable_api_server,
+            in_counter_up,
+            in_counter_down,
+            relay_buffer_size,
+            inner_map,
+        }
     }
-    Ok(())
+    pub async fn serve_http_conn(&self, io: TcpStream) -> io::Result<()> {
+        let http_conn = Http::new();
+        let inner_map = self.inner_map.clone();
+        let router = self.router.clone();
+        let enable_api_server = self.enable_api_server;
+        let in_counter_up = self.in_counter_up;
+        let in_counter_down = self.in_counter_down;
+        let relay_buffer_size = self.relay_buffer_size;
+        let client = self.client.clone();
+        let conn = http_conn
+            .serve_connection(
+                io,
+                service_fn(|req| {
+                    let inner_map = inner_map.clone();
+                    let router = router.clone();
+                    let client = client.clone();
+                    async move {
+                        if Method::CONNECT == req.method() {
+                            proxy_connect(
+                                req,
+                                inner_map,
+                                router,
+                                enable_api_server,
+                                in_counter_up,
+                                in_counter_down,
+                                relay_buffer_size,
+                            )
+                            .await
+                        } else {
+                            proxy(req, client).await
+                        }
+                    }
+                }),
+            )
+            .with_upgrades();
+        if let Err(e) = conn.await {
+            return Err(new_error(e));
+        }
+        Ok(())
+    }
 }
 
-async fn proxy(
+async fn proxy_connect(
     req: Request<Body>,
     inner_map: Arc<HashMap<String, ChainStreamBuilder>>,
     router: Arc<Router>,
@@ -66,47 +102,54 @@ async fn proxy(
     in_counter_down: Option<&'static AtomicU64>,
     relay_buffer_size: usize,
 ) -> Result<Response<Body>, hyper::Error> {
-    debug_log!("http proxy server req: {:?}", req);
-
-    if Method::CONNECT == req.method() {
-        if let Some(addr) = host_addr(req.uri()) {
-            tokio::task::spawn(async move {
-                let inner_map = inner_map;
-                let router = router;
-                match hyper::upgrade::on(req).await {
-                    Ok(upgraded) => {
-                        if let Err(e) = tunnel(
-                            upgraded,
-                            addr,
-                            inner_map,
-                            router,
-                            enable_api_server,
-                            in_counter_up,
-                            in_counter_down,
-                            relay_buffer_size,
-                        )
-                        .await
-                        {
-                            log::error!("http tunnel error: {}", e);
-                        };
-                    }
-                    Err(e) => log::error!("upgrade error: {}", e),
+    if let Some(addr) = host_addr(req.uri()) {
+        tokio::task::spawn(async move {
+            let inner_map = inner_map;
+            let router = router;
+            match hyper::upgrade::on(req).await {
+                Ok(upgraded) => {
+                    if let Err(e) = tunnel(
+                        upgraded,
+                        addr,
+                        inner_map,
+                        router,
+                        enable_api_server,
+                        in_counter_up,
+                        in_counter_down,
+                        relay_buffer_size,
+                    )
+                    .await
+                    {
+                        log::error!("http tunnel error: {}", e);
+                    };
                 }
-            });
+                Err(e) => log::error!("upgrade error: {}", e),
+            }
+        });
 
-            Ok(Response::new(Body::empty()))
-        } else {
-            log::error!("CONNECT host is not socket addr: {:?}", req.uri());
-            let mut resp = Response::new(Body::from("CONNECT must be to a socket address"));
-            *resp.status_mut() = http::StatusCode::BAD_REQUEST;
-
-            Ok(resp)
-        }
+        Ok(Response::new(Body::empty()))
     } else {
-        // todo: support other method
-        let mut resp = Response::new(Body::from("only support CONNECT"));
+        log::error!("CONNECT host is not socket addr: {:?}", req.uri());
+        let mut resp = Response::new(Body::from("CONNECT must be to a socket address"));
         *resp.status_mut() = http::StatusCode::BAD_REQUEST;
+
         Ok(resp)
+    }
+}
+async fn proxy(
+    mut req: Request<Body>,
+    client: Client<Connector>,
+) -> Result<Response<Body>, hyper::Error> {
+    remove_proxy_headers(&mut req);
+    debug_log!("http proxy server req: {:?}", req);
+    let response: Result<Response<Body>, hyper::Error> = client.request(req).await;
+    if response.is_err() {
+        Ok(Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(Body::empty())
+            .unwrap())
+    } else {
+        response
     }
 }
 
@@ -154,4 +197,13 @@ async fn tunnel(
         relay(upgraded, server, relay_buffer_size).await?;
     }
     Ok(())
+}
+
+pub fn remove_proxy_headers(req: &mut Request<Body>) {
+    // Remove headers that shouldn't be forwarded to upstream
+    req.headers_mut().remove(header::ACCEPT_ENCODING);
+    req.headers_mut().remove(header::CONNECTION);
+    req.headers_mut().remove("proxy-connection");
+    req.headers_mut().remove(header::PROXY_AUTHENTICATE);
+    req.headers_mut().remove(header::PROXY_AUTHORIZATION);
 }

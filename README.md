@@ -166,7 +166,6 @@ tag = "block"
 
 ### http
 - ✅ http Inbound
-  - 🚧 RFC 7230
 - ✅ mixed Inbound
 
 ### Vmess
