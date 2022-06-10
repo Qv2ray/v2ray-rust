@@ -11,7 +11,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::task::Poll;
 
-use crate::config::{Router};
+use crate::config::Router;
 
 use crate::proxy::{Address, BoxProxyStream, ChainStreamBuilder};
 
