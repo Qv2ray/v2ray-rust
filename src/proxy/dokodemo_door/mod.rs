@@ -19,6 +19,7 @@ macro_rules! syscall {
     }};
 }
 
+#[cfg(unix)]
 pub(crate) unsafe fn setsockopt<T>(
     fd: c_int,
     opt: c_int,
