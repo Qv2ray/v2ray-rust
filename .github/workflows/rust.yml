@@ -125,28 +125,28 @@ jobs:
       run: |
         cargo test --release --target=${{matrix.config.target_triple}} 
         
-    - uses: robinraju/release-downloader@v1.3
+    - uses: robinraju/release-downloader@v1.4
       with:
         repository: "v2fly/geoip"
         latest: true
         fileName: "geoip.dat"
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: robinraju/release-downloader@v1.3
+    - uses: robinraju/release-downloader@v1.4
       with:
         repository: "v2fly/geoip"
         latest: true
         fileName: "geoip.dat.sha256sum"
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: robinraju/release-downloader@v1.3
+    - uses: robinraju/release-downloader@v1.4
       with:
         repository: "v2fly/domain-list-community"
         latest: true
         fileName: "dlc.dat.sha256sum"
         token: ${{ secrets.GITHUB_TOKEN }}
 
-    - uses: robinraju/release-downloader@v1.3
+    - uses: robinraju/release-downloader@v1.4
       with:
         repository: "v2fly/domain-list-community"
         latest: true
