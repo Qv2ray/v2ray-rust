@@ -89,7 +89,7 @@ impl ChainableStreamBuilder for GrpcStreamBuilder {
     }
 
     fn protocol_type(&self) -> ProtocolType {
-        ProtocolType::H2
+        ProtocolType::Grpc
     }
 }
 
