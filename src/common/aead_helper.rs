@@ -1,5 +1,5 @@
 use aes::cipher::generic_array::typenum::Unsigned;
-use aes_gcm::{aead::Tag, AeadInPlace};
+use aes_gcm::{aead::Tag, AeadInPlace, KeyInit};
 pub use aes_gcm::{Aes128Gcm, Aes256Gcm};
 pub use chacha20poly1305::ChaCha20Poly1305;
 
@@ -23,21 +23,18 @@ pub trait AeadCipherHelper: AeadInPlace {
 
 impl AeadCipherHelper for Aes128Gcm {
     fn new_with_slice(key: &[u8]) -> Self {
-        use aes_gcm::NewAead;
         Aes128Gcm::new(key.into())
     }
 }
 
 impl AeadCipherHelper for Aes256Gcm {
     fn new_with_slice(key: &[u8]) -> Self {
-        use aes_gcm::NewAead;
         Aes256Gcm::new(key.into())
     }
 }
 
 impl AeadCipherHelper for ChaCha20Poly1305 {
     fn new_with_slice(key: &[u8]) -> Self {
-        use chacha20poly1305::aead::NewAead;
         ChaCha20Poly1305::new(key.into())
     }
 }
