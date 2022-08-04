@@ -16,7 +16,7 @@ actix-server = "2.1.1"
 actix-service = "2.0"
 aead = "0.4.3"
 aes = "0.8.1"
-aes-gcm = "0.9.4"
+aes-gcm = "0.10.1"
 anyhow = "1.0"
 async-trait = "0.1"
 base64 = "0.13.0"
@@ -38,7 +38,7 @@ hkdf = "0.12"
 hmac = "0.12"
 log = "0.4"
 md-5 = "0.10.0"
-prost = "0.10"
+prost = "0.11"
 protobuf = {version = "3.0.1", features = ["with-bytes"]}
 rand = {version = "0.8", features = ["small_rng"]}
 regex = "1.6.0"
@@ -52,7 +52,7 @@ tokio-boring = "2.1.4"
 tokio-tungstenite = {version = "0.17", features = ["stream"], default-features = false}
 tokio-util = {version = "0.7", features = ["codec", "net"]}
 toml = "0.5"
-tonic = "0.7"
+tonic = "0.8"
 uuid = {version = "1.1", features = ["std", "v4"]}
 #cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
 brotli = "3.3.4"
@@ -72,7 +72,7 @@ strip = true
 
 [build-dependencies]
 protobuf-codegen = "3.1.0"
-tonic-build = "0.7"
+tonic-build = "0.8"
 
 [target.'cfg(windows)'.dependencies]
 schannel = "0.1.20"
