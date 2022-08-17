@@ -39,7 +39,9 @@ impl HttpInbound {
         in_counter_down: Option<&'static AtomicU64>,
         relay_buffer_size: usize,
     ) -> Self {
-        let client = Client::builder().build(Connector::new(inner_map.clone(), router.clone()));
+        let client = Client::builder()
+            .http1_preserve_header_case(true)
+            .build(Connector::new(inner_map.clone(), router.clone()));
         Self {
             client,
             router,
