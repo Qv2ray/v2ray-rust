@@ -45,7 +45,7 @@ regex = "1.6.0"
 serde = {version = "1.0", features = ["derive"]}
 sha-1 = "0.10.0"
 sha2 = "0.10.1"
-socket2 = {version = "0.4.4", features = ["all"]}
+socket2 = {version = "0.4.6", features = ["all"]}
 spin = "0.9.4"
 tokio = {version = "1.20", features = ["net", "io-util", "macros", "sync"]}
 tokio-boring = "2.1.4"
