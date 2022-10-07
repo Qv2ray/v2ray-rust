@@ -37,7 +37,7 @@ fn main() -> io::Result<()> {
     #[cfg(not(debug_assertions))]
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     let filename = matches.get_one::<String>("config").unwrap().to_string();
-    if matches.contains_id("validate") {
+    if matches.get_flag("validate") {
         let _ = Config::read_from_file(filename)?;
         info!("A valid config file.");
         return Ok(());
