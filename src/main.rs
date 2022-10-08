@@ -1,5 +1,5 @@
 use crate::config::Config;
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use log::info;
 use std::io;
 
@@ -19,7 +19,6 @@ fn main() -> io::Result<()> {
                 .short('c')
                 .long("config")
                 .required(true)
-                .takes_value(true)
                 .help(".toml config file name"),
         )
         .arg(
@@ -27,6 +26,7 @@ fn main() -> io::Result<()> {
                 .short('t')
                 .long("test")
                 .required(false)
+                .action(ArgAction::SetTrue)
                 .help("validate given toml config file"),
         )
         .author("Developed by @darsvador")
@@ -36,8 +36,8 @@ fn main() -> io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("v2ray_rust=debug,info"));
     #[cfg(not(debug_assertions))]
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
-    let filename = matches.value_of("config").unwrap().to_string();
-    if matches.is_present("validate") {
+    let filename = matches.get_one::<String>("config").unwrap().to_string();
+    if matches.get_flag("validate") {
         let _ = Config::read_from_file(filename)?;
         info!("A valid config file.");
         return Ok(());
