@@ -44,16 +44,16 @@ rand = {version = "0.8", features = ["small_rng"]}
 regex = "1.6.0"
 serde = {version = "1.0", features = ["derive"]}
 sha-1 = "0.10.0"
-sha2 = "0.10.1"
+sha2 = "0.10.5"
 socket2 = {version = "0.4.7", features = ["all"]}
 spin = "0.9.4"
 tokio = {version = "1.21", features = ["net", "io-util", "macros", "sync"]}
-tokio-boring = "2.1.4"
+tokio-boring = "2.1.5"
 tokio-tungstenite = {version = "0.17", features = ["stream"], default-features = false}
 tokio-util = {version = "0.7", features = ["codec", "net"]}
 toml = "0.5"
 tonic = "0.8"
-uuid = {version = "1.1", features = ["std", "v4"]}
+uuid = {version = "1.2", features = ["std", "v4"]}
 #cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
 brotli = "3.3.4"
 gentian = "0.1.8"
@@ -71,7 +71,7 @@ opt-level = 3
 strip = true
 
 [build-dependencies]
-protobuf-codegen = "3.1.0"
+protobuf-codegen = "3.2.0"
 tonic-build = "0.8"
 
 [target.'cfg(windows)'.dependencies]
