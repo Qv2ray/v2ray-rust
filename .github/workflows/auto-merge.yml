@@ -18,7 +18,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: ahmadnassri/action-dependabot-auto-merge@v2
         with:
-          target: patch
+          target: minor
           # Note: This needs to be a PAT with (public) repo rights,
           #       PAT-owning user needs to have write access to this repo
           #       (dependabot needs to recognize the comment as coming from an allowed reviewer)
