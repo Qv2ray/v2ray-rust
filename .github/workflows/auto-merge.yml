@@ -1,0 +1,15 @@
+name: dependabot-auto-merge
+on: pull_request_target
+jobs:
+  auto:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - id: approve-squash-merge
+        name: Auto approve pull request, then squash and merge
+        uses: ahmadnassri/action-dependabot-auto-merge@v2.4.0
+        with:
+          approve: true
+          command: squash and merge
+          config: .github/auto-merge.yml
+          github-token: ${{ secrets.PAT_REPO_ADMIN }}
