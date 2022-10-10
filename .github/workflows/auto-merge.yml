@@ -7,7 +7,7 @@ jobs:
     steps:
       - id: approve-squash-merge
         name: Auto approve pull request, then squash and merge
-        uses: ahmadnassri/action-dependabot-auto-merge@v2.4.0
+        uses: ahmadnassri/action-dependabot-auto-merge@v2.6.0
         with:
           approve: true
           command: squash and merge
