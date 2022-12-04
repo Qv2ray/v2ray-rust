@@ -31,14 +31,16 @@ pub struct Socks5Stream<S> {
     stream: S,
     read_buf: BytesMut,
     authed_users: HashMap<Bytes, Bytes>,
+    local_addr: Address,
 }
 
 impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
-    pub fn new(stream: S) -> Socks5Stream<S> {
+    pub fn new(stream: S, local_addr: SocketAddr) -> Socks5Stream<S> {
         Socks5Stream {
             stream,
             read_buf: BytesMut::with_capacity(LW_BUFFER_SIZE),
             authed_users: HashMap::new(),
+            local_addr: Address::SocketAddress(local_addr),
         }
     }
     pub async fn init(
@@ -130,10 +132,10 @@ impl<S: AsyncReadExt + Unpin + AsyncWriteExt> Socks5Stream<S> {
         match buf[1] {
             socks_command::CONNECT => {
                 self.read_buf.clear();
-                self.read_buf.reserve(address.serialized_len() + 3);
+                self.read_buf.reserve(self.local_addr.serialized_len() + 3);
                 self.read_buf
                     .put_slice(&[SOCKS_VERSION, response_code::SUCCESS, 0x00]);
-                address.write_to_buf(&mut self.read_buf);
+                self.local_addr.write_to_buf(&mut self.read_buf);
                 self.stream.write_all(&self.read_buf).await?;
                 Ok((self.stream, address))
             }

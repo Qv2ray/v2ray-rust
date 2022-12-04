@@ -207,7 +207,8 @@ impl ConfigServerBuilder {
                                 } else {
                                     None
                                 };
-                                let stream = Socks5Stream::new(io);
+                                let local_addr = io.local_addr()?;
+                                let stream = Socks5Stream::new(io, local_addr);
                                 let mut udp_socket = None;
                                 let x = stream.init(addr, &mut udp_socket).await?;
                                 if let Some(udp_socket) = udp_socket {
