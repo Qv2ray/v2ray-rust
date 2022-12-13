@@ -32,6 +32,7 @@ clap = "4"
 crc32fast = "1.3.2"
 domain_matcher = {git = "https://github.com/darsvador/DomainMatcher", rev = "8df5a46746d90900d"}
 env_logger = "0.10"
+foreign-types-shared = "0.3.1"
 futures-util = {version = "0.3", default-features = false, features = ["sink", "std"]}
 generic-array = "0.14.5"
 hkdf = "0.12"
