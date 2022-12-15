@@ -26,6 +26,9 @@ on:
   # For test
   workflow_dispatch:
 
+concurrency: 
+  group: ${{ github.head_ref }}
+  cancel-in-progress: true
 
 env:
   RUST_BACKTRACE: 1
