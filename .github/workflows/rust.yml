@@ -86,7 +86,7 @@ jobs:
 
     - name: Get rust version
       id: rust-version
-      run: echo "::set-output name=version::$(rustc --version)"
+      run: echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
 
     - name: Cache cargo index
       uses: actions/cache@v3.0.11
@@ -176,7 +176,7 @@ jobs:
     - name: Get the version
       if: github.event_name == 'release' && matrix.config.has_release
       id: get_version
-      run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
+      run: echo VERSION=$(echo $GITHUB_REF | cut -d / -f 3) >> $GITHUB_OUTPUT
     
     - name: Upload to GitHub Release
       uses: svenstaro/upload-release-action@v2
