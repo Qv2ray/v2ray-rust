@@ -26,12 +26,16 @@ on:
   # For test
   workflow_dispatch:
 
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   RUST_BACKTRACE: 1
 
 jobs:
   build:
+    timeout-minutes: 30
     env:
       CARGO_TERM_COLOR: always
       PROTOC_NO_VENDOR: true
@@ -86,7 +90,7 @@ jobs:
 
     - name: Get rust version
       id: rust-version
-      run: echo "::set-output name=version::$(rustc --version)"
+      run: echo "version=$(rustc --version)" >> $GITHUB_OUTPUT
 
     - name: Cache cargo index
       uses: actions/cache@v3.0.11
@@ -176,7 +180,7 @@ jobs:
     - name: Get the version
       if: github.event_name == 'release' && matrix.config.has_release
       id: get_version
-      run: echo ::set-output name=VERSION::$(echo $GITHUB_REF | cut -d / -f 3)
+      run: echo VERSION=$(echo $GITHUB_REF | cut -d / -f 3) >> $GITHUB_OUTPUT
     
     - name: Upload to GitHub Release
       uses: svenstaro/upload-release-action@v2
@@ -187,4 +191,3 @@ jobs:
         asset_name: v2ray-rust-${{ steps.get_version.outputs.VERSION }}-${{ matrix.config.artifact }}.7z
         tag: ${{ github.ref }}
         overwrite: true
-
