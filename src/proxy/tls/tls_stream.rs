@@ -197,18 +197,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_tls() {
-        let b = "client.tlsfingerprint.io:8443";
+        let b = "google.com:443";
         let addr = b.to_socket_addrs().unwrap().next().unwrap();
         let stream = TcpStream::connect(&addr).await.unwrap();
         println!("local:{}", stream.local_addr().unwrap());
-        let b = TlsStreamBuilder::new_from_config(
-            "client.tlsfingerprint.io".to_string(),
-            &None,
-            true,
-            true,
-        );
+        let b = TlsStreamBuilder::new_from_config("google.com".to_string(), &None, true, true);
         let mut stream = b.build_tcp(Box::new(stream)).await.unwrap();
-        stream.write_all(b"GET / HTTP/1.1\r\nHost: client.tlsfingerprint.io\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36\r\n\r\n").await.unwrap();
+        stream.write_all(b"GET / HTTP/1.1\r\nHost: google.com\r\nAccept: */*\r\nUser-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/98.0.4758.102 Safari/537.36\r\n\r\n").await.unwrap();
         let mut buf = vec![0u8; 1024];
         stream.read_buf(&mut buf).await.unwrap();
         let response = String::from_utf8_lossy(&buf);
