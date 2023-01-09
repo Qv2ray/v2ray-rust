@@ -2,8 +2,7 @@ use crate::common::new_error;
 use crate::debug_log;
 use crate::proxy::websocket::BinaryWsStream;
 use crate::proxy::{BoxProxyStream, UdpRead, UdpWrite};
-use base64::encode_config;
-use base64::URL_SAFE_NO_PAD;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use futures_util::ready;
 use std::future::Future;
 use std::io::Error;
@@ -126,7 +125,7 @@ impl AsyncWrite for BinaryWsStreamWithEarlyData {
                         self.as_mut().early_data_len =
                             cmp::min(self.as_mut().early_data_len, buf.len());
                         let header_value =
-                            encode_config(&buf[..self.as_mut().early_data_len], URL_SAFE_NO_PAD);
+                            URL_SAFE_NO_PAD.encode(&buf[..self.as_mut().early_data_len]);
                         *v = HeaderValue::from_bytes(header_value.as_bytes())
                             .expect("base64 encode error");
                         debug_log!("header base64 str:{}", header_value);
