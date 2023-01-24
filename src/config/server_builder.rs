@@ -1,4 +1,4 @@
-use crate::api::ApiServer;
+use crate::api::{ApiLatencyServer, ApiServer};
 use crate::common::net::{relay, relay_with_atomic_counter};
 use crate::config::{DokodemoDoor, Inbounds, Router};
 use crate::proxy::dokodemo_door::build_dokodemo_door_listener;
@@ -91,13 +91,16 @@ impl ConfigServerBuilder {
         }
         let inner_map = (&self.inner_map).clone();
         {
+            let api_inner_map = (&self.inner_map).clone();
             actix_rt::System::new().block_on(async move {
                 if enable_api_server {
                     info!("api server listening on: {}", self.api_server_addr);
                     tokio::spawn(async move {
                         let api_server = ApiServer::new_server();
+                        let api_latency_server = ApiLatencyServer::new_server(api_inner_map);
                         tonic::transport::Server::builder()
                             .add_service(api_server)
+                            .add_service(api_latency_server)
                             .serve(self.api_server_addr.get_sock_addr())
                             .await?;
                         Ok::<(), tonic::transport::Error>(())

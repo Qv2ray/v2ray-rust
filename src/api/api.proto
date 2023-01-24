@@ -14,6 +14,20 @@ message Stat {
   int64 value = 2;
 }
 
+enum LatencyType{
+  TCPING=0;
+  REALPING=1;
+}
+
+message GetLatencyRequest{
+  optional string outbound_name =1;
+  string test_url=2;
+}
+
+message GetLatencyResponse{
+    map<string,int64> latency_res=2;
+}
+
 message GetStatsResponse { Stat stat = 1; }
 
 // message QueryStatsRequest {
@@ -21,10 +35,11 @@ message GetStatsResponse { Stat stat = 1; }
 //   bool reset = 2;
 // }
 
-message QueryStatsResponse { repeated Stat stat = 1; }
-
 service StatsService {
   rpc GetStats(GetStatsRequest) returns (GetStatsResponse) {}
-  //rpc QueryStats(QueryStatsRequest) returns (QueryStatsResponse) {}
 }
+service LatencyService {
+  rpc GetLatency(GetLatencyRequest) returns (GetLatencyResponse) {}
+}
+
 

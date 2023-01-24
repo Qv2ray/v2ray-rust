@@ -23,6 +23,7 @@ pub mod grpc;
 pub mod h2;
 pub mod http;
 pub mod shadowsocks;
+pub mod simpleobfs;
 pub mod socks;
 pub mod tls;
 pub mod trojan;
@@ -71,6 +72,7 @@ pub enum ProtocolType {
     Direct,
     H2,
     Blackhole,
+    SimpleObfs,
 }
 
 impl ProtocolType {

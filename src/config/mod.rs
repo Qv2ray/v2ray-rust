@@ -188,6 +188,13 @@ struct Http2Config {
 }
 
 #[derive(Deserialize, Clone)]
+struct SimpleObfsConfig {
+    tag: String,
+    #[serde(deserialize_with = "from_str_to_address")]
+    host: Address,
+}
+
+#[derive(Deserialize, Clone)]
 struct GrpcConfig {
     tag: String,
     host: String,
@@ -225,6 +232,8 @@ pub struct Config {
     #[serde(default)]
     blackhole: Vec<BlackHoleConfig>,
     #[serde(default)]
+    simpleobfs: Vec<SimpleObfsConfig>,
+    #[serde(default)]
     dokodemo: Vec<DokodemoDoor>,
     #[serde(default)]
     domain_routing_rules: Vec<DomainRoutingRules>,
@@ -259,6 +268,7 @@ impl std::ops::Index<(ProtocolType, usize)> for Config {
             ProtocolType::H2 => &self.h2[index.1],
             ProtocolType::Grpc => &self.grpc[index.1],
             ProtocolType::Blackhole => &self.blackhole[index.1],
+            ProtocolType::SimpleObfs => &self.simpleobfs[index.1],
         }
     }
 }
@@ -291,6 +301,7 @@ impl Config {
         insert_config_map!(self.h2, config_map);
         insert_config_map!(self.grpc, config_map);
         insert_config_map!(self.blackhole, config_map);
+        insert_config_map!(self.simpleobfs, config_map);
         let mut inner_map = HashMap::new();
         for out in self.outbounds.iter() {
             let mut addrs = Vec::new();

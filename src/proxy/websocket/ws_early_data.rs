@@ -2,7 +2,7 @@ use crate::common::new_error;
 use crate::debug_log;
 use crate::proxy::websocket::BinaryWsStream;
 use crate::proxy::{BoxProxyStream, UdpRead, UdpWrite};
-use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use futures_util::ready;
 use std::future::Future;
 use std::io::Error;
