@@ -50,7 +50,7 @@ socket2 = {version = "0.4.7", features = ["all"]}
 spin = "0.9.4"
 tokio = {version = "1.24", features = ["net", "io-util", "macros", "sync"]}
 tokio-boring = "2.1.5"
-tokio-tungstenite = {version = "0.17", features = ["stream"], default-features = false}
+tokio-tungstenite = {version = "0.18", features = ["stream", "handshake"], default-features = false}
 tokio-util = {version = "0.7", features = ["codec", "net"]}
 toml = "0.5"
 tonic = "0.8"
