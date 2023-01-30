@@ -11,7 +11,7 @@ default = []
 strict-vmess-udp = []
 
 [dependencies]
-actix-rt = "2.7"
+actix-rt = "2.8"
 actix-server = "2.1.1"
 actix-service = "2.0"
 aead = "0.5"
