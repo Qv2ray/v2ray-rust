@@ -52,7 +52,7 @@ tokio = {version = "1.24", features = ["net", "io-util", "macros", "sync"]}
 tokio-boring = "2.1.5"
 tokio-tungstenite = {version = "0.18", features = ["stream", "handshake"], default-features = false}
 tokio-util = {version = "0.7", features = ["codec", "net"]}
-toml = "0.5"
+toml = "0.7"
 tonic = "0.8"
 uuid = {version = "1.2", features = ["std", "v4"]}
 #cidr_matcher={git="https://github.com/Qv2ray/CIDRMatcher"}
