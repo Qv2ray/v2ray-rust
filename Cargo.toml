@@ -47,7 +47,7 @@ serde = {version = "1.0", features = ["derive"]}
 sha-1 = "0.10.1"
 sha2 = "0.10.6"
 socket2 = {version = "0.4.7", features = ["all"]}
-spin = "0.9.5"
+spin = "0.9.6"
 tokio = {version = "1.25", features = ["net", "io-util", "macros", "sync"]}
 tokio-boring = "2.1.5"
 tokio-tungstenite = {version = "0.18", features = ["stream", "handshake"], default-features = false}
