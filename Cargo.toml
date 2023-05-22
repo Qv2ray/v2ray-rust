@@ -34,7 +34,7 @@ domain_matcher = {git = "https://github.com/darsvador/DomainMatcher", rev = "8df
 env_logger = "0.10"
 foreign-types-shared = "0.3.1"
 futures-util = {version = "0.3", default-features = false, features = ["sink", "std"]}
-generic-array = "0.14.5"
+generic-array = "0.14.7"
 hkdf = "0.12"
 hmac = "0.12"
 log = "0.4"
