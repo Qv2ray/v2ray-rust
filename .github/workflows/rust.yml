@@ -71,7 +71,7 @@ jobs:
     - name: Set up NASM
       uses: ilammy/setup-nasm@v1.4.0
 
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
 
     - name: macOS - Build preparation - Install Packages
       if: matrix.config.os == 'macos-latest'
